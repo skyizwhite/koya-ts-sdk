@@ -1,0 +1,38 @@
+{
+  "koyaSchema": 1,
+  "webhooks": [{ "label": "revalidate", "url": "https://example.com/api/revalidate" }],
+  "models": [
+    {
+      "name": "blog",
+      "kind": "list",
+      "label": "title",
+      "fields": [
+        { "name": "title", "type": "text", "required": true },
+        { "name": "slug", "type": "slug", "from": "title", "unique": true },
+        { "name": "cover", "type": "media" },
+        { "name": "content", "type": "richtext" },
+        { "name": "category", "type": "select", "options": ["tech", "life"] },
+        { "name": "author", "type": "reference", "model": "author" },
+        { "name": "tags", "type": "reference", "model": "tag", "many": true }
+      ]
+    },
+    {
+      "name": "author",
+      "kind": "list",
+      "fields": [
+        { "name": "name", "type": "text", "required": true },
+        { "name": "avatar", "type": "media" },
+        { "name": "mentor", "type": "reference", "model": "author" }
+      ]
+    },
+    { "name": "tag", "kind": "list", "fields": [{ "name": "name", "type": "text", "required": true }] },
+    {
+      "name": "site-settings",
+      "kind": "object",
+      "fields": [
+        { "name": "maintenance", "type": "boolean", "required": true, "default": false },
+        { "name": "postsPerPage", "type": "number", "integer": true, "min": 1 }
+      ]
+    }
+  ]
+}

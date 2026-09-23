@@ -1,0 +1,42 @@
+{
+  "name": "koya-ts-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript client for koya, a self-hosted headless CMS: the delivery and admin APIs, a schema you deploy from npm scripts, and types generated from it",
+  "license": "MIT",
+  "author": "Akira Tempaku",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skyizwhite/koya-ts-sdk.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "koya": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "openapi"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "openapi:sync": "node scripts/sync-openapi.ts",
+    "generate": "orval",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && chmod +x dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'test/**/*.test.ts'",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "orval": "^8.37.0",
+    "typescript": "^7.0.2"
+  }
+}
