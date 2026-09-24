@@ -41,6 +41,11 @@ const post = await koya.getItem("blog", id, { draftKey }); // a draft, for previ
 const about = await koya.getObject("about");
 ```
 
+`createClient` works on a server and in a browser: the delivery API answers
+cross-origin requests from any site. A delivery key in a page can be read by
+anyone who loads it, and it reads only what is published. Keep draft keys on
+preview pages.
+
 `KoyaModels` is what `koya types` writes (below). Without it every model and
 field is accepted and every content is `{ [field: string]: unknown }`.
 
