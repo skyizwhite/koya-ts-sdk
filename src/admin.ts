@@ -125,7 +125,10 @@ export function createAdminClient<M extends ModelMap = AnyModels>(options: Admin
       ): Content<K> {
         return publishAdminContent(space, model, id, options, init) as Promise<any>;
       },
-      /** Takes it off the delivery API, keeping its data as a draft. */
+      /**
+       * Takes it off the delivery API, keeping its data as a draft. Refused with `409 in_use`
+       * while another content refers to it.
+       */
       unpublish<K extends keyof M & string>(model: K, id: string): Content<K> {
         return unpublishAdminContent(space, model, id, init) as Promise<any>;
       },
@@ -133,6 +136,7 @@ export function createAdminClient<M extends ModelMap = AnyModels>(options: Admin
       discardDraft<K extends keyof M & string>(model: K, id: string): Content<K> {
         return discardAdminContentDraft(space, model, id, init) as Promise<any>;
       },
+      /** Refused with `409 in_use` while another content refers to it. */
       delete: (model: keyof M & string, id: string) => deleteAdminContent(space, model, id, init),
       /** The key that serves the draft through the delivery API, for preview URLs. */
       draftKey: async (model: keyof M & string, id: string) =>

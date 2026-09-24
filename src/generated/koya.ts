@@ -427,7 +427,7 @@ export interface Media {
 }
 
 export type MediaWithReferences = Media & {
-  /** The number of contents whose data mentions it */
+  /** The number of contents that use it in a `media` or `richtext` field of the current schema */
   references: number;
 };
 
@@ -524,7 +524,7 @@ export type FieldsParameter = string;
 
 /**
  * Comma-separated reference fields to embed, dotted for nesting:
- * `tags,author.avatar` embeds `tags`, and `avatar` inside each `author`.
+ * `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
  * Only `reference` fields may be named. Referenced contents that are
  * missing or unpublished are dropped from a `many` field and `null` in a
  * single one.
@@ -566,7 +566,7 @@ fields?: FieldsParameter;
 filters?: FiltersParameter;
 /**
  * Comma-separated reference fields to embed, dotted for nesting:
- * `tags,author.avatar` embeds `tags`, and `avatar` inside each `author`.
+ * `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
  * Only `reference` fields may be named. Referenced contents that are
  * missing or unpublished are dropped from a `many` field and `null` in a
  * single one.
@@ -586,7 +586,7 @@ export type GetContentParams = {
 fields?: FieldsParameter;
 /**
  * Comma-separated reference fields to embed, dotted for nesting:
- * `tags,author.avatar` embeds `tags`, and `avatar` inside each `author`.
+ * `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
  * Only `reference` fields may be named. Referenced contents that are
  * missing or unpublished are dropped from a `many` field and `null` in a
  * single one.
@@ -1037,7 +1037,10 @@ export const getUpdateAdminContentDraftUrl = (space: string,
  * `data` is merged onto the current draft (or, without one, the published
  * data): keys present replace, a `null` value removes the key, keys absent
  * stay. The result is validated whole. A new draft key is issued, so earlier
- * preview links stop working.
+ * preview links stop working. When the result is what the content holds
+ * already, nothing is written -- no draft, no revision, no webhook -- and
+ * the content comes back as it is; when it is the published data again,
+ * the draft is dropped, as `discard-draft` would.
  * @summary Save a draft
  */
 export const updateAdminContentDraft = async (space: string,
@@ -1082,6 +1085,7 @@ export const getDeleteAdminContentUrl = (space: string,
 
 /**
  * Removes both versions. Fires `delete` webhooks when it was published.
+ * Refused with 409 `in_use` while another content refers to it.
  * @summary Delete a content
  */
 export const deleteAdminContent = async (space: string,
@@ -1159,7 +1163,8 @@ export const getUnpublishAdminContentUrl = (space: string,
 /**
  * Takes the content off the delivery API. Its data (the draft when there is
  * one) is kept as a draft with a new draft key; `publishedAt` is cleared.
- * Fires `unpublish` webhooks.
+ * Fires `unpublish` webhooks. A published content is refused with 409
+ * `in_use` while another content refers to it.
  * @summary Unpublish
  */
 export const unpublishAdminContent = async (space: string,

@@ -1,13 +1,19 @@
 openapi: 3.1.0
 info:
   title: koya
-  version: 0.8.0
+  version: 0.10.0
   summary: Delivery and admin APIs of a koya server
   description: |
     Two JSON APIs on one server.
 
     * The **delivery API** (`/api/v1`) reads published content with a per-space
-      **delivery key**, created on the space's *Keys* page.
+      **delivery key**, created on the space's *Keys* page. It answers browsers
+      on any origin: a preflight `OPTIONS` gets `204` with
+      `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET`,
+      `Access-Control-Allow-Headers: X-KOYA-DELIVERY-KEY` and
+      `Access-Control-Max-Age: 86400`, and every answer carries
+      `Access-Control-Allow-Origin: *`. The admin API answers no cross-origin
+      request.
     * The **admin API** (`/admin/api`) manages the schema, contents, keys and media
       with a **management key** (made on the space's *Keys* page) as a Bearer
       token. A key belongs to one space: every route but `/admin/api/me` names a
@@ -21,8 +27,8 @@ info:
     (`2026-09-20T05:04:03.123Z`). Every error is
     `{"error": {"code", "message", "details"?}}`; any route can also answer
     `500 internal_error`, and any request body over 21 MB `413 too_large`. The
-    schema document is specified in SCHEMA.md; the Lisp client that wraps these
-    calls in CLIENT.md.
+    schema document is specified in SCHEMA.md, and API.md walks through both
+    APIs. koya-ts-sdk (https://github.com/skyizwhite/koya-ts-sdk) wraps them.
   license:
     name: AGPL-3.0-or-later
     url: https://www.gnu.org/licenses/agpl-3.0.html
@@ -304,7 +310,10 @@ paths:
         `data` is merged onto the current draft (or, without one, the published
         data): keys present replace, a `null` value removes the key, keys absent
         stay. The result is validated whole. A new draft key is issued, so earlier
-        preview links stop working.
+        preview links stop working. When the result is what the content holds
+        already, nothing is written -- no draft, no revision, no webhook -- and
+        the content comes back as it is; when it is the published data again,
+        the draft is dropped, as `discard-draft` would.
       security: [{ managementKey: [] }]
       requestBody:
         required: true
@@ -326,10 +335,17 @@ paths:
       operationId: deleteAdminContent
       tags: [contents]
       summary: Delete a content
-      description: Removes both versions. Fires `delete` webhooks when it was published.
+      description: |
+        Removes both versions. Fires `delete` webhooks when it was published.
+        Refused with 409 `in_use` while another content refers to it.
       security: [{ managementKey: [] }]
       responses:
         "200": { $ref: "#/components/responses/Deleted" }
+        "409":
+          description: "`in_use`: other contents refer to it through a reference field of the current schema; the message names how many"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/CrossOrigin" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -374,7 +390,8 @@ paths:
       description: |
         Takes the content off the delivery API. Its data (the draft when there is
         one) is kept as a draft with a new draft key; `publishedAt` is cleared.
-        Fires `unpublish` webhooks.
+        Fires `unpublish` webhooks. A published content is refused with 409
+        `in_use` while another content refers to it.
       security: [{ managementKey: [] }]
       parameters:
         - $ref: "#/components/parameters/space"
@@ -386,6 +403,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminContent" }
+        "409":
+          description: "`in_use`: other contents refer to it through a reference field of the current schema; the message names how many"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/CrossOrigin" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -587,7 +609,7 @@ paths:
       security: [{ managementKey: [] }]
       responses:
         "200":
-          description: The media plus `references`, the number of contents whose data mentions it
+          description: The media plus `references`, the number of contents that use it in a `media` or `richtext` field of the current schema
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MediaWithReferences" }
@@ -703,7 +725,7 @@ components:
       schema: { type: string }
       description: |
         Comma-separated reference fields to embed, dotted for nesting:
-        `tags,author.avatar` embeds `tags`, and `avatar` inside each `author`.
+        `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
         Only `reference` fields may be named. Referenced contents that are
         missing or unpublished are dropped from a `many` field and `null` in a
         single one.
@@ -814,7 +836,7 @@ components:
         owner: { type: boolean, description: "true when called with the admin UI's session" }
         management: { type: boolean, description: "true when called with a management key" }
         space: { type: [string, "null"], description: "the space a management key is limited to; null for the owner" }
-        version: { type: string, examples: ["0.8.0"] }
+        version: { type: string, examples: ["0.10.0"] }
 
     Schema:
       type: object
@@ -1213,7 +1235,7 @@ components:
         - type: object
           required: [references]
           properties:
-            references: { type: integer, description: The number of contents whose data mentions it }
+            references: { type: integer, description: The number of contents that use it in a `media` or `richtext` field of the current schema }
 
     DeliveryKeys:
       type: object
