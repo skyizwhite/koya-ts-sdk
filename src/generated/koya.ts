@@ -1094,7 +1094,8 @@ export const getDeleteAdminContentUrl = (space: string,
 }
 
 /**
- * Removes both versions. Fires `delete` webhooks.
+ * Removes both versions. Fires `delete` webhooks, or `discard` for a content
+ * that was only a draft.
  * Refused with 409 `in_use` while another content refers to it.
  * @summary Delete a content
  */
