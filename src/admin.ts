@@ -109,7 +109,10 @@ export function createAdminClient<M extends ModelMap = AnyModels>(options: Admin
       get<K extends keyof M & string>(model: K, id: string): Content<K> {
         return getAdminContent(space, model, id, init) as Promise<any>;
       },
-      /** Saved as a draft unless `publish`. On an `object` model that has its content, that content is updated. */
+      /**
+       * Saved as a draft unless `publish`. Refused with `409 object_exists` on an `object` model that
+       * has its content already; change that one through its id.
+       */
       create<K extends keyof M & string>(model: K, data: DataInput<Data<K>>, options: CreateOptions = {}): Content<K> {
         return createAdminContent(space, model, { data, ...options }, init) as Promise<any>;
       },
@@ -126,13 +129,16 @@ export function createAdminClient<M extends ModelMap = AnyModels>(options: Admin
         return publishAdminContent(space, model, id, options, init) as Promise<any>;
       },
       /**
-       * Takes it off the delivery API, keeping its data as a draft. Refused with `409 in_use`
-       * while another content refers to it.
+       * Takes it off the delivery API, keeping its data as a draft. Refused with `409 not_published`
+       * when it is not published, and `409 in_use` while another content refers to it.
        */
       unpublish<K extends keyof M & string>(model: K, id: string): Content<K> {
         return unpublishAdminContent(space, model, id, init) as Promise<any>;
       },
-      /** Drops the draft of a published content. */
+      /**
+       * Drops the draft of a published content. Refused with `409 not_published` when it is not
+       * published, and `409 no_draft` when it has no draft.
+       */
       discardDraft<K extends keyof M & string>(model: K, id: string): Content<K> {
         return discardAdminContentDraft(space, model, id, init) as Promise<any>;
       },

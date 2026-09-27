@@ -67,6 +67,10 @@ export interface Me {
 export interface Webhook {
   /** Defaults to `url`; always present on output */
   label?: string;
+  /**
+     * Starts with `http://` or `https://`. See SCHEMA.md for which addresses are sent to.
+     * @pattern ^[Hh][Tt][Tt][Pp][Ss]?://.
+     */
   url: string;
   /** Model names this webhook is narrowed to; absent means every model. */
   only?: string[];
@@ -274,9 +278,15 @@ export interface Model {
   /** @pattern ^[a-z][a-z0-9-]*$ */
   name: string;
   kind: ModelKind;
-  /** Template for the editor's preview link; `{CONTENT_ID}` and `{DRAFT_KEY}` are substituted. */
+  /**
+     * Template for the editor's preview link, starting with `http://` or `https://`; `{CONTENT_ID}` and `{DRAFT_KEY}` are substituted.
+     * @pattern ^[Hh][Tt][Tt][Pp][Ss]?://.
+     */
   previewUrl?: string;
-  /** Template for the editor's published page link; `{CONTENT_ID}` is substituted. */
+  /**
+     * Template for the editor's published page link, starting with `http://` or `https://`; `{CONTENT_ID}` is substituted.
+     * @pattern ^[Hh][Tt][Tt][Pp][Ss]?://.
+     */
   publicUrl?: string;
   /**
      * A text or slug field of this model, whose value the admin UI
@@ -961,9 +971,9 @@ export const getCreateAdminContentUrl = (space: string,
 /**
  * Saved as a draft unless `publish` is true. `id` and the system timestamps
  * may be supplied, for imports that keep another system's ids and dates;
- * `publishedAt` and `revisedAt` are only stored when publishing. For an
- * `object` model that already has its content, that content is updated
- * (drafted, or published with `publish`) instead of a second one being made.
+ * `publishedAt` and `revisedAt` are only stored when publishing. An
+ * `object` model that already has its content refuses a second one; change
+ * that one through its id.
  * @summary Create a content
  */
 export const createAdminContent = async (space: string,
@@ -1084,7 +1094,7 @@ export const getDeleteAdminContentUrl = (space: string,
 }
 
 /**
- * Removes both versions. Fires `delete` webhooks when it was published.
+ * Removes both versions. Fires `delete` webhooks.
  * Refused with 409 `in_use` while another content refers to it.
  * @summary Delete a content
  */
@@ -1163,8 +1173,9 @@ export const getUnpublishAdminContentUrl = (space: string,
 /**
  * Takes the content off the delivery API. Its data (the draft when there is
  * one) is kept as a draft with a new draft key; `publishedAt` is cleared.
- * Fires `unpublish` webhooks. A published content is refused with 409
- * `in_use` while another content refers to it.
+ * Fires `unpublish` webhooks. A content that is not published is refused
+ * with 409 `not_published`, and a published one with 409 `in_use` while
+ * another content refers to it.
  * @summary Unpublish
  */
 export const unpublishAdminContent = async (space: string,
@@ -1193,7 +1204,7 @@ export const getDiscardAdminContentDraftUrl = (space: string,
 }
 
 /**
- * No webhook fires; what is published does not change.
+ * Fires `discard` webhooks. A content with no draft is refused with 409.
  * @summary Discard the draft of a published content
  */
 export const discardAdminContentDraft = async (space: string,
@@ -1374,9 +1385,9 @@ export const getUploadMediaUrl = (space: string,) => {
 
 /**
  * `multipart/form-data` with one or more `file` parts and an optional `alt`
- * applied to all of them. PNG, JPEG, GIF and WebP, up to 20 MB each, decided
- * by the file's leading bytes; the part's Content-Type is ignored. The whole
- * request body is limited to 21 MB.
+ * applied to all of them. PNG, JPEG, GIF and WebP, up to 20 MB each and 20 MB
+ * together, decided by the file's leading bytes; the part's Content-Type is
+ * ignored. The whole request body is limited to 21 MB.
  * @summary Upload images
  */
 export const uploadMedia = async (space: string,
