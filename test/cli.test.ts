@@ -12,6 +12,13 @@ const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
 const sdk = fileURLToPath(new URL("../src/index.ts", import.meta.url));
 
 const destructive = { op: "remove_field", path: "tag.slug", destructive: true, description: "! - tag.slug (slug)" };
+const tightened = {
+  op: "change_field_options",
+  path: "tag.name",
+  destructive: false,
+  description: "~ tag.name options tightened (required none -> true), 1 content does not fit",
+  misfits: [{ id: "t1", field: "name", version: "draft", message: "is required" }],
+};
 const requests: Array<{ method: string; url: string; auth: string | undefined; body: string }> = [];
 
 const server = createServer(async (req, res) => {
@@ -30,6 +37,12 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "PUT" && req.url === "/admin/api/schema/site?force=true") {
     return send(200, { applied: [destructive], schema: JSON.parse(body) });
+  }
+  if (req.method === "POST" && req.url === "/admin/api/schema/fit/plan") {
+    return send(200, { changes: [tightened], destructive: false });
+  }
+  if (req.method === "PUT" && req.url?.startsWith("/admin/api/schema/fit")) {
+    return send(409, { error: { code: "contents_do_not_fit", message: "Some contents do not fit", details: [tightened] } });
   }
   if (req.method === "GET" && req.url === "/admin/api/schema/site") {
     return send(200, { koyaSchema: 1, models: [{ name: "tag", kind: "list", fields: [{ name: "name", type: "text" }] }] });
@@ -109,4 +122,23 @@ test("a missing management key is reported without a stack trace", async () => {
   env.KOYA_MANAGEMENT_KEY = saved;
   assert.equal(code, 1);
   assert.equal(stderr, "koya: The management key is not set: give it in koya.config.ts or KOYA_MANAGEMENT_KEY\n");
+});
+
+test("plan lists the contents a tightened option would leave out of fit", async () => {
+  const { code, stdout } = await run("plan", "--space", "fit");
+  assert.equal(code, 0);
+  assert.match(stdout, /1 content does not fit/);
+  assert.match(stdout, /^ {4}t1 name \(draft\): is required$/m);
+});
+
+test("deploy is refused while contents do not fit, and force is not tried", async () => {
+  requests.length = 0;
+  const { code, stdout } = await run("deploy", "--space", "fit");
+  assert.equal(code, 1);
+  assert.match(stdout, /do not fit/);
+  assert.match(stdout, /^ {4}t1 name \(draft\): is required$/m);
+  assert.deepEqual(
+    requests.map((r) => r.url),
+    ["/admin/api/schema/fit"],
+  );
 });

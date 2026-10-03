@@ -28,17 +28,34 @@ export const ChangeOp = {
   change_field_options: 'change_field_options',
 } as const;
 
+export type MisfitVersion = typeof MisfitVersion[keyof typeof MisfitVersion];
+
+
+export const MisfitVersion = {
+  published: 'published',
+  draft: 'draft',
+} as const;
+
+export interface Misfit {
+  id: string;
+  field: string;
+  version: MisfitVersion;
+  message: string;
+}
+
 export interface Change {
   op: ChangeOp;
   path: string;
   destructive: boolean;
   description: string;
+  /** Stored contents that do not fit a tightened option or a required field added; present only when there are some */
+  misfits?: Misfit[];
 }
 
 export type ApiErrorError = {
   code: string;
   message: string;
-  /** `validation_failed` lists problems, `destructive_changes` changes */
+  /** `validation_failed` lists problems, `destructive_changes` and `contents_do_not_fit` changes */
   details?: ValidationProblem[] | Change[];
 };
 
@@ -47,15 +64,8 @@ export interface ApiError {
 }
 
 export interface Me {
-  /** true when called with the admin UI's session */
-  owner: boolean;
-  /** true when called with a management key */
-  management: boolean;
-  /**
-     * the space a management key is limited to; null for the owner
-     * @nullable
-     */
-  space: string | null;
+  /** the space the management key is limited to */
+  space: string;
   version: string;
 }
 
@@ -212,7 +222,10 @@ export interface SelectField {
   type: SelectFieldType;
   was?: FieldName;
   required?: boolean;
-  /** @minItems 1 */
+  /**
+     * @minItems 1
+     * @items.pattern ^[^,]*$
+     */
   options: string[];
   many?: boolean;
 }
@@ -331,7 +344,7 @@ export interface CreateContent {
   data: ContentData;
   publish?: boolean;
   /**
-     * Defaults to a fresh ULID.
+     * Defaults to a fresh ULID. `new` is refused, as the admin UI's new-content form.
      * @pattern ^[A-Za-z0-9_-]{1,64}$
      */
   id?: string;
@@ -354,8 +367,8 @@ export interface PublishContent {
  * Delivery shape: the data with the system fields merged in. `media` fields
  * are expanded to Media objects (or `null` when the file is gone); `richtext`
  * HTML has its `/media/` URLs made absolute; `reference` fields are ids
- * unless embedded through `include`. With `fields`, only the named keys
- * are present, system fields included.
+ * unless embedded through `include`. With `fields`, only the named data
+ * fields are present; the system fields always are.
  */
 export interface Content {
   id: string;
@@ -486,11 +499,6 @@ export type UnauthorizedResponse = ApiError;
 export type ForbiddenResponse = ApiError;
 
 /**
- * `forbidden`: a browser request from another origin
- */
-export type CrossOriginResponse = ApiError;
-
-/**
  * `not_found`: unknown space, model, content, media or endpoint
  */
 export type NotFoundResponse = ApiError;
@@ -527,8 +535,8 @@ export type OrdersParameter = string;
 export type FiltersParameter = string;
 
 /**
- * Comma-separated keys to keep in each content; applied after `include` and
- * media expansion. System fields not named are dropped too.
+ * Comma-separated fields to keep in each content; applied after `include` and
+ * media expansion. The system fields are always kept.
  */
 export type FieldsParameter = string;
 
@@ -554,6 +562,7 @@ export type GetContentsParams = {
 limit?: LimitParameter;
 /**
  * @minimum 0
+ * @maximum 9223372036854776000
  */
 offset?: OffsetParameter;
 /**
@@ -562,8 +571,8 @@ offset?: OffsetParameter;
  */
 orders?: OrdersParameter;
 /**
- * Comma-separated keys to keep in each content; applied after `include` and
- * media expansion. System fields not named are dropped too.
+ * Comma-separated fields to keep in each content; applied after `include` and
+ * media expansion. The system fields are always kept.
  */
 fields?: FieldsParameter;
 /**
@@ -590,8 +599,8 @@ draftKey?: DraftKeyParameter;
 
 export type GetContentParams = {
 /**
- * Comma-separated keys to keep in each content; applied after `include` and
- * media expansion. System fields not named are dropped too.
+ * Comma-separated fields to keep in each content; applied after `include` and
+ * media expansion. The system fields are always kept.
  */
 fields?: FieldsParameter;
 /**
@@ -606,6 +615,10 @@ include?: IncludeParameter;
  * The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data.
  */
 draftKey?: DraftKeyParameter;
+};
+
+export type GetHealth200 = {
+  status: 'ok';
 };
 
 export type DeploySchemaParams = {
@@ -630,6 +643,7 @@ export type ListAdminContentsParams = {
 limit?: LimitParameter;
 /**
  * @minimum 0
+ * @maximum 9223372036854776000
  */
 offset?: OffsetParameter;
 /**
@@ -667,6 +681,7 @@ q?: string;
 limit?: number;
 /**
  * @minimum 0
+ * @maximum 9223372036854776000
  */
 offset?: number;
 };
@@ -770,9 +785,9 @@ export const getGetHealthUrl = () => {
 /**
  * @summary Liveness, touching the database
  */
-export const getHealth = async ( options?: Parameters<typeof koyaFetch>[1]): Promise<string> => {
+export const getHealth = async ( options?: Parameters<typeof koyaFetch>[1]): Promise<GetHealth200> => {
 
-  return koyaFetch<string>(getGetHealthUrl(),
+  return koyaFetch<GetHealth200>(getGetHealthUrl(),
   {
     ...options,
     method: 'GET'
@@ -850,7 +865,9 @@ export const getDeploySchemaUrl = (space: string,
 /**
  * Validates the document, diffs it against the space's stored schema and,
  * unless a destructive change is present without `force=true`, stores it.
- * Existing content is never modified. The space must already exist — it is
+ * Existing content changes only as the schema does: a rename carries it
+ * through, and a removed or retyped field's values are taken out of every
+ * published object, draft and revision. The space must already exist — it is
  * made in the admin UI — and a deploy to an unknown name is a 404.
  * @summary Replace the space's schema
  */
@@ -970,7 +987,10 @@ export const getCreateAdminContentUrl = (space: string,
 
 /**
  * Saved as a draft unless `publish` is true. `id` and the system timestamps
- * may be supplied, for imports that keep another system's ids and dates;
+ * may be supplied, for imports that keep another system's ids and dates; an
+ * id need only be unique within the space;
+ * a timestamp needs a date, a time and an offset or `Z`, and is stored in
+ * UTC with milliseconds.
  * `publishedAt` and `revisedAt` are only stored when publishing. An
  * `object` model that already has its content refuses a second one; change
  * that one through its id.

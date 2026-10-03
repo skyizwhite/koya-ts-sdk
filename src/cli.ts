@@ -63,8 +63,13 @@ function configSchema(config: Config): Schema {
 
 function printChanges(changes: readonly Change[]) {
   if (changes.length === 0) console.log("No changes.");
-  // the server's description already starts with "!" on a destructive change
-  for (const change of changes) console.log(change.destructive ? change.description : `  ${change.description}`);
+  for (const change of changes) {
+    // the server's description already starts with "!" on a destructive change
+    console.log(change.destructive ? change.description : `  ${change.description}`);
+    for (const misfit of change.misfits ?? []) {
+      console.log(`    ${misfit.id} ${misfit.field} (${misfit.version}): ${misfit.message}`);
+    }
+  }
 }
 
 async function confirm(question: string): Promise<boolean> {
@@ -83,6 +88,12 @@ async function deploy(client: ReturnType<typeof admin>, schema: Schema, force: b
     console.log(`Applied ${applied.length} change${applied.length === 1 ? "" : "s"}.`);
     return 0;
   } catch (e) {
+    if (e instanceof KoyaError && e.code === "contents_do_not_fit") {
+      console.log("The deploy is refused: these contents do not fit it yet:");
+      printChanges((e.details ?? []) as Change[]);
+      console.error("Nothing deployed; change them first.");
+      return 1;
+    }
     if (!(e instanceof KoyaError && e.code === "destructive_changes")) throw e;
     console.log("The deploy contains destructive changes:");
     printChanges((e.details ?? []) as Change[]);

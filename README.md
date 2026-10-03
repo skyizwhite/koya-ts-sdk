@@ -11,7 +11,7 @@ self-hosted headless CMS:
 ESM, nothing at runtime but `fetch`: Node 22.18+, Deno, Bun, edge runtimes.
 
 ```sh
-npm install github:skyizwhite/koya-ts-sdk#v0.2.1
+npm install github:skyizwhite/koya-ts-sdk#v0.3.0
 ```
 
 It is not on the npm registry yet. npm builds `dist/` on install, so the first
@@ -49,8 +49,9 @@ preview pages.
 `KoyaModels` is what `koya types` writes (below). Without it every model and
 field is accepted and every content is `{ [field: string]: unknown }`.
 
-`fields` narrows the result type too: `fields: ["id", "title"]` gives
-`{ id; title }`. Errors are thrown as `KoyaError` with the server's `status`,
+`fields` narrows the result type too: `fields: ["title"]` gives `{ title }`
+with the system fields (`id`, `createdAt`, `updatedAt`, `publishedAt`,
+`revisedAt`), which are always delivered. Errors are thrown as `KoyaError` with the server's `status`,
 `code`, `message` and `details`.
 
 ## Managing content
@@ -127,8 +128,8 @@ specifies, typed field by field. The space itself is made in koya's admin UI.
 
 | Command | |
 |---|---|
-| `koya plan` | what `deploy` would change; `!` marks a destructive change |
-| `koya deploy` | deploys the schema. Destructive changes are asked about on a terminal and refused elsewhere, unless `--force` |
+| `koya plan` | what `deploy` would change; `!` marks a destructive change, and the contents a tightened option would leave out of fit are listed under it |
+| `koya deploy` | deploys the schema. Destructive changes are asked about on a terminal and refused elsewhere, unless `--force`; while stored contents do not fit, it is refused whatever `--force` says |
 | `koya pull [-o file]` | the deployed schema as JSON |
 | `koya types [--from config\|server\|file.json] [-o file]` | writes `KoyaModels` and a `<Model>Data` / `<Model>Fields` pair per model |
 

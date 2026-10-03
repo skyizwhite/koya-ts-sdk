@@ -21,8 +21,9 @@ expect<Equal<Delivered<M, "author", "mentor.mentor">["mentor"], Delivered<M, "au
 
 declare const client: Client<M>;
 async function calls() {
-  const page = await client.getList("blog", { fields: ["id", "title"] });
-  expect<Equal<keyof (typeof page.contents)[number], "id" | "title">>();
+  const page = await client.getList("blog", { fields: ["title"] });
+  // fields narrows the content's own fields; the system fields are always there
+  expect<Equal<keyof (typeof page.contents)[number], "id" | "createdAt" | "updatedAt" | "publishedAt" | "revisedAt" | "title">>();
   const settings = await client.getObject("site-settings");
   expect<Equal<typeof settings.maintenance, boolean>>();
   // @ts-expect-error an object model is not listed

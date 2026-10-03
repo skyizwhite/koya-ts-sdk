@@ -24,7 +24,7 @@ export interface ClientOptions {
 export interface ItemQuery<M extends ModelMap, K extends keyof M, I extends string, F extends string> {
   /** Reference fields to embed, dotted for nesting: `["tags", "author.avatar"]`. */
   include?: readonly I[];
-  /** Keys to keep in each content; system fields not named are dropped too. */
+  /** Fields to keep in each content; the system fields are always kept. */
   fields?: readonly F[];
   /** Serves the draft instead, for previews. */
   draftKey?: string;

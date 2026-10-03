@@ -76,8 +76,8 @@ export type Delivered<M extends ModelMap, K extends keyof M, I extends string = 
     : M[K]["fields"][F];
 };
 
-/** Narrowed to the keys named in `fields`, when it is given. */
-export type Selected<T, F extends string> = [F] extends [never] ? T : Pick<T, F & keyof T>;
+/** Narrowed to the fields named in `fields`, when it is given; the system fields always stay. */
+export type Selected<T, F extends string> = [F] extends [never] ? T : Pick<T, (F | keyof SystemFields) & keyof T>;
 
 export type FieldName<M extends ModelMap, K extends keyof M> = Untyped<M> extends true
   ? string
