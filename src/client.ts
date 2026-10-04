@@ -1,5 +1,5 @@
-import { getContent, getContents } from "./generated/koya.ts";
-import type { GetContentsParams } from "./generated/koya.ts";
+import { getList, getListContent, getObject } from "./generated/koya.ts";
+import type { GetListParams } from "./generated/koya.ts";
 import type { Transport } from "./http.ts";
 import type {
   AnyModels,
@@ -56,8 +56,8 @@ function joined(value: string | readonly string[] | undefined): string | undefin
   return typeof value === "string" ? value : value.join(",");
 }
 
-function params(query: ListQuery<any, any, string, string> & { draftKey?: string } = {}): GetContentsParams {
-  const out: GetContentsParams = {};
+function params(query: ListQuery<any, any, string, string> & { draftKey?: string } = {}): GetListParams & { draftKey?: string } {
+  const out: GetListParams & { draftKey?: string } = {};
   if (query.limit !== undefined) out.limit = query.limit;
   if (query.offset !== undefined) out.offset = query.offset;
   const orders = joined(query.orders);
@@ -86,7 +86,7 @@ export function createClient<M extends ModelMap = AnyModels>(options: ClientOpti
       model: K,
       query?: ListQuery<M, K, I, F>,
     ): Promise<ContentList<Result<M, K, I, F>>> {
-      return getContents(space, model, params(query), { transport }) as Promise<any>;
+      return getList(space, model, params(query), { transport }) as Promise<any>;
     },
 
     /** One published content of a `list` model, or its draft with `draftKey`. */
@@ -95,7 +95,7 @@ export function createClient<M extends ModelMap = AnyModels>(options: ClientOpti
       id: string,
       query?: ItemQuery<M, K, I, F>,
     ): Promise<Result<M, K, I, F>> {
-      return getContent(space, model, id, params(query), { transport }) as Promise<any>;
+      return getListContent(space, model, id, params(query), { transport }) as Promise<any>;
     },
 
     /** The content of an `object` model, or its draft with `draftKey`. */
@@ -103,7 +103,7 @@ export function createClient<M extends ModelMap = AnyModels>(options: ClientOpti
       model: K,
       query?: ItemQuery<M, K, I, F>,
     ): Promise<Result<M, K, I, F>> {
-      return getContents(space, model, params(query), { transport }) as Promise<any>;
+      return getObject(space, model, params(query), { transport }) as Promise<any>;
     },
   };
 }

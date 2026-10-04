@@ -19,7 +19,7 @@ test("getList sends the delivery key and joins list parameters", async () => {
   });
   assert.equal(page.totalCount, 0);
   const [call] = calls;
-  assert.equal(call?.url.origin + call!.url.pathname, "https://cms.example.com/api/v1/website/blog");
+  assert.equal(call?.url.origin + call!.url.pathname, "https://cms.example.com/api/v1/website/lists/blog");
   assert.equal(call?.headers.get("x-koya-delivery-key"), "koya_d");
   assert.deepEqual(Object.fromEntries(call!.url.searchParams), {
     limit: "5",
@@ -36,9 +36,9 @@ test("getItem and getObject address the content and pass the draft key", async (
   const client = createClient<KoyaModels>({ ...options, fetch });
   await client.getItem("blog", "a", { draftKey: "dk" });
   await client.getObject("site-settings");
-  assert.equal(calls[0]?.url.pathname, "/api/v1/website/blog/a");
+  assert.equal(calls[0]?.url.pathname, "/api/v1/website/lists/blog/a");
   assert.equal(calls[0]?.url.searchParams.get("draftKey"), "dk");
-  assert.equal(calls[1]?.url.pathname, "/api/v1/website/site-settings");
+  assert.equal(calls[1]?.url.pathname, "/api/v1/website/objects/site-settings");
   assert.equal(calls[1]?.url.search, "");
 });
 

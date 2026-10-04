@@ -19,6 +19,7 @@ export { KoyaError } from "./http.ts";
 export type * from "./models.ts";
 export type {
   Change,
+  CustomField,
   DeliveryKey,
   Field,
   Media,

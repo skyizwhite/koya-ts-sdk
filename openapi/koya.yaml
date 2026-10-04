@@ -23,8 +23,8 @@ info:
     Bodies use camelCase keys. Timestamps are ISO 8601 in UTC with milliseconds
     (`2026-09-20T05:04:03.123Z`). Every error is
     `{"error": {"code", "message", "details"?}}`; any route can also answer
-    `500 internal_error`. A request body over 21 MB is answered with 413 and a
-    plain-text body before it is read, not with an error object. The
+    `500 internal_error`. Any route given a request body over 21 MB answers
+    `413 too_large` before reading it. The
     schema document is specified in SCHEMA.md, and API.md walks through both
     APIs. koya-ts-sdk (https://github.com/skyizwhite/koya-ts-sdk) wraps them.
   license:
@@ -45,8 +45,10 @@ tags:
     description: Published content, read with a delivery key
   - name: schema
     description: The stored schema and the diff against a new one
-  - name: contents
-    description: Contents including drafts
+  - name: lists
+    description: List contents including drafts
+  - name: objects
+    description: Objects including drafts
   - name: keys
     description: Delivery keys and the webhook secret
   - name: media
@@ -55,15 +57,12 @@ tags:
 security: []
 
 paths:
-  /api/v1/{space}/{model}:
+  /api/v1/{space}/lists/{model}:
     get:
-      operationId: getContents
+      operationId: getList
       tags: [delivery]
-      summary: List published contents, or read an object model's content
-      description: |
-        For a `list` model, a page of published contents. For an `object` model,
-        its single content (published, or its draft with the right `draftKey`);
-        `limit`, `offset`, `orders`, `filters` and `q` are ignored then.
+      summary: List published list contents
+      description: A page of a `list` model's published contents. 404 for an `object` model.
       security: [{ deliveryKey: [] }]
       parameters:
         - $ref: "#/components/parameters/space"
@@ -75,26 +74,23 @@ paths:
         - $ref: "#/components/parameters/filters"
         - $ref: "#/components/parameters/q"
         - $ref: "#/components/parameters/include"
-        - $ref: "#/components/parameters/draftKey"
       responses:
         "200":
-          description: A page of contents, or the object model's content
+          description: A page of list contents
           content:
             application/json:
-              schema:
-                oneOf:
-                  - $ref: "#/components/schemas/ContentList"
-                  - $ref: "#/components/schemas/Content"
+              schema: { $ref: "#/components/schemas/ContentList" }
         "400": { $ref: "#/components/responses/BadQuery" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /api/v1/{space}/{model}/{id}:
+  /api/v1/{space}/lists/{model}/{id}:
     get:
-      operationId: getContent
+      operationId: getListContent
       tags: [delivery]
-      summary: Read one published content
+      summary: Read one published list content
+      description: Its draft with the right `draftKey`. 404 for an `object` model.
       security: [{ deliveryKey: [] }]
       parameters:
         - $ref: "#/components/parameters/space"
@@ -105,7 +101,33 @@ paths:
         - $ref: "#/components/parameters/draftKey"
       responses:
         "200":
-          description: The content
+          description: The list content
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Content" }
+        "400": { $ref: "#/components/responses/BadQuery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/{space}/objects/{model}:
+    get:
+      operationId: getObject
+      tags: [delivery]
+      summary: Read a published object
+      description: |
+        The one content of an `object` model, or its draft with the right
+        `draftKey`. 404 for a `list` model, or while the object is not published.
+      security: [{ deliveryKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+        - $ref: "#/components/parameters/fields"
+        - $ref: "#/components/parameters/include"
+        - $ref: "#/components/parameters/draftKey"
+      responses:
+        "200":
+          description: The object
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Content" }
@@ -149,7 +171,7 @@ paths:
               schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /admin/api/schema/{space}:
+  /admin/api/{space}/schema:
     parameters:
       - $ref: "#/components/parameters/space"
     get:
@@ -164,6 +186,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Schema" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     put:
       operationId: deploySchema
@@ -175,7 +198,8 @@ paths:
         Existing content changes only as the schema does: a rename carries it
         through, and a removed or retyped field's values are taken out of every
         published object, draft and revision. The space must already exist — it is
-        made in the admin UI — and a deploy to an unknown name is a 404.
+        made in the admin UI — and a deploy to another name, one that does not
+        exist included, is a 403.
       security: [{ managementKey: [] }]
       parameters:
         - name: force
@@ -208,8 +232,9 @@ paths:
                   message: Schema deploy contains destructive changes; retry with force=true
                   details:
                     - { op: remove_field, path: blog.summary, destructive: true, description: "! - blog.summary (text)" }
+        "413": { $ref: "#/components/responses/TooLarge" }
 
-  /admin/api/schema/{space}/plan:
+  /admin/api/{space}/schema/plan:
     parameters:
       - $ref: "#/components/parameters/space"
     post:
@@ -232,21 +257,20 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
 
-  /admin/api/contents/{space}/{model}:
+  /admin/api/{space}/lists/{model}:
     parameters:
       - $ref: "#/components/parameters/space"
       - $ref: "#/components/parameters/model"
     get:
-      operationId: listAdminContents
-      tags: [contents]
-      summary: List every content of a model, drafts included, or read an object model's content
+      operationId: getAdminList
+      tags: [lists]
+      summary: List every list content, drafts included
       description: |
-        For a `list` model, a page of contents; takes the delivery API's `limit`,
-        `offset`, `orders`, `filters` and `q`, and they apply to the
-        draft data when a content has one. For an `object` model, its content,
-        both versions, and those parameters are ignored; 404 until its first
-        write.
+        A page of a `list` model's contents; takes the delivery API's `limit`,
+        `offset`, `orders`, `filters` and `q`, and they apply to the draft data
+        when a content has one. 404 for an `object` model.
       security: [{ managementKey: [] }]
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -256,29 +280,26 @@ paths:
         - $ref: "#/components/parameters/q"
       responses:
         "200":
-          description: A page of contents, or the object model's content
+          description: A page of list contents
           content:
             application/json:
-              schema:
-                oneOf:
-                  - $ref: "#/components/schemas/AdminContentList"
-                  - $ref: "#/components/schemas/AdminContent"
+              schema: { $ref: "#/components/schemas/AdminContentList" }
         "400": { $ref: "#/components/responses/BadQuery" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     post:
-      operationId: createAdminContent
-      tags: [contents]
-      summary: Create a content
+      operationId: createAdminListContent
+      tags: [lists]
+      summary: Create a list content
       description: |
         Saved as a draft unless `publish` is true. `id` and the system timestamps
         may be supplied, for imports that keep another system's ids and dates; an
         id need only be unique within the space;
         a timestamp needs a date, a time and an offset or `Z`, and is stored in
         UTC with milliseconds.
-        `publishedAt` and `revisedAt` are only stored when publishing. An
-        `object` model that already has its content refuses a second one; change
-        that one through the model.
+        `publishedAt` and `revisedAt` are only stored when publishing. 404 for an
+        `object` model: its object is made by its first write.
       security: [{ managementKey: [] }]
       requestBody:
         required: true
@@ -296,157 +317,23 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: "`conflict`: a content with this `id` already exists in the space; `object_exists`: the `object` model already has its content"
+          description: "`conflict`: a content with this `id` already exists in the space"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
-        "422": { $ref: "#/components/responses/ValidationFailed" }
-    patch:
-      operationId: updateAdminObjectDraft
-      tags: [contents]
-      summary: Save a draft of an object model's content
-      description: |
-        As saving a draft through an id, for the content of an `object` model.
-        The first save makes that content, filling the defaults. 404 for a
-        `list` model.
-      security: [{ managementKey: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/UpdateDraft" }
-      responses:
-        "200":
-          description: The content with its new draft
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdminContent" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
 
-  /admin/api/contents/{space}/{model}/publish:
-    post:
-      operationId: publishAdminObject
-      tags: [contents]
-      summary: Publish an object model's content
-      description: |
-        As publishing through an id, for the content of an `object` model.
-        Before its first write, `data` makes the content, published; without
-        `data` that is a 404. 404 for a `list` model.
-      security: [{ managementKey: [] }]
-      parameters:
-        - $ref: "#/components/parameters/space"
-        - $ref: "#/components/parameters/model"
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/PublishContent" }
-      responses:
-        "200":
-          description: The published content
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdminContent" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422": { $ref: "#/components/responses/ValidationFailed" }
-
-  /admin/api/contents/{space}/{model}/unpublish:
-    post:
-      operationId: unpublishAdminObject
-      tags: [contents]
-      summary: Unpublish an object model's content
-      description: |
-        As unpublishing through an id, for the content of an `object` model.
-        404 for a `list` model, or before its first write.
-      security: [{ managementKey: [] }]
-      parameters:
-        - $ref: "#/components/parameters/space"
-        - $ref: "#/components/parameters/model"
-      responses:
-        "200":
-          description: The content, now a draft
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdminContent" }
-        "409":
-          description: "`not_published`: the content is not published. `in_use`: other contents refer to it through a reference field of the current schema; the message names how many"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ApiError" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /admin/api/contents/{space}/{model}/discard-draft:
-    post:
-      operationId: discardAdminObjectDraft
-      tags: [contents]
-      summary: Discard the draft of an object model's content
-      description: |
-        As discarding through an id, for the content of an `object` model.
-        404 for a `list` model, or before its first write.
-      security: [{ managementKey: [] }]
-      parameters:
-        - $ref: "#/components/parameters/space"
-        - $ref: "#/components/parameters/model"
-      responses:
-        "200":
-          description: The content, published only
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdminContent" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409":
-          description: "`not_published`: the content has no published version to fall back to. `no_draft`: it is published with no draft to discard"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ApiError" }
-
-  /admin/api/contents/{space}/{model}/draft-key:
-    post:
-      operationId: getAdminObjectDraftKey
-      tags: [contents]
-      summary: The draft key of an object model's content
-      description: |
-        As the draft key through an id, for the content of an `object` model.
-        404 for a `list` model, or before its first write.
-      security: [{ managementKey: [] }]
-      parameters:
-        - $ref: "#/components/parameters/space"
-        - $ref: "#/components/parameters/model"
-      responses:
-        "200":
-          description: The key
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [draftKey]
-                properties:
-                  draftKey: { type: string, examples: ["3f1c…"] }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /admin/api/contents/{space}/{model}/{id}:
-    description: A content of a `list` model; every route under it answers 404 for an `object` model.
+  /admin/api/{space}/lists/{model}/{id}:
+    description: A list content; every route under it answers 404 for an `object` model.
     parameters:
       - $ref: "#/components/parameters/space"
       - $ref: "#/components/parameters/model"
       - $ref: "#/components/parameters/id"
     get:
-      operationId: getAdminContent
-      tags: [contents]
-      summary: Read a content, both versions
+      operationId: getAdminListContent
+      tags: [lists]
+      summary: Read a list content, both versions
       security: [{ managementKey: [] }]
       responses:
         "200":
@@ -455,10 +342,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AdminContent" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
-      operationId: updateAdminContentDraft
-      tags: [contents]
+      operationId: updateAdminListContent
+      tags: [lists]
       summary: Save a draft
       description: |
         `data` is merged onto the current draft (or, without one, the published
@@ -484,11 +372,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
     delete:
-      operationId: deleteAdminContent
-      tags: [contents]
-      summary: Delete a content
+      operationId: deleteAdminListContent
+      tags: [lists]
+      summary: Delete a list content
       description: |
         Removes both versions. Fires `delete` webhooks, or `discard` for a content
         that was only a draft.
@@ -497,7 +386,7 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Deleted" }
         "409":
-          description: "`in_use`: other contents refer to it through a reference field of the current schema; the message names how many"
+          description: "`in_use`: other contents refer to it through a reference field of the current schema, one inside a custom field or a repeater's rows included; the message names how many"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
@@ -505,10 +394,10 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /admin/api/contents/{space}/{model}/{id}/publish:
+  /admin/api/{space}/lists/{model}/{id}/publish:
     post:
-      operationId: publishAdminContent
-      tags: [contents]
+      operationId: publishAdminListContent
+      tags: [lists]
       summary: Publish
       description: |
         Publishes `data` when given, else the current draft, else re-publishes the
@@ -535,12 +424,13 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
 
-  /admin/api/contents/{space}/{model}/{id}/unpublish:
+  /admin/api/{space}/lists/{model}/{id}/unpublish:
     post:
-      operationId: unpublishAdminContent
-      tags: [contents]
+      operationId: unpublishAdminListContent
+      tags: [lists]
       summary: Unpublish
       description: |
         Takes the content off the delivery API. Its data (the draft when there is
@@ -560,7 +450,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AdminContent" }
         "409":
-          description: "`not_published`: the content is not published. `in_use`: other contents refer to it through a reference field of the current schema; the message names how many"
+          description: "`not_published`: the content is not published. `in_use`: other contents refer to it through a reference field of the current schema, one inside a custom field or a repeater's rows included; the message names how many"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
@@ -568,11 +458,11 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /admin/api/contents/{space}/{model}/{id}/discard-draft:
+  /admin/api/{space}/lists/{model}/{id}/discard-draft:
     post:
-      operationId: discardAdminContentDraft
-      tags: [contents]
-      summary: Discard the draft of a published content
+      operationId: discardAdminListContentDraft
+      tags: [lists]
+      summary: Discard the draft of a published list content
       description: Fires `discard` webhooks. A content with no draft is refused with 409.
       security: [{ managementKey: [] }]
       parameters:
@@ -594,11 +484,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
 
-  /admin/api/contents/{space}/{model}/{id}/draft-key:
+  /admin/api/{space}/lists/{model}/{id}/draft-key:
     post:
-      operationId: getAdminContentDraftKey
-      tags: [contents]
-      summary: The content's draft key
+      operationId: getAdminListContentDraftKey
+      tags: [lists]
+      summary: The list content's draft key
       description: |
         For building preview URLs. Generated on first call; replaced whenever a
         draft is saved.
@@ -621,7 +511,175 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /admin/api/keys/{space}:
+  /admin/api/{space}/objects/{model}:
+    parameters:
+      - $ref: "#/components/parameters/space"
+      - $ref: "#/components/parameters/model"
+    get:
+      operationId: getAdminObject
+      tags: [objects]
+      summary: Read an object, both versions
+      description: 404 for a `list` model, or before the object's first write.
+      security: [{ managementKey: [] }]
+      responses:
+        "200":
+          description: The object
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: updateAdminObject
+      tags: [objects]
+      summary: Save a draft of an object
+      description: |
+        As saving a draft of a list content. The first save makes the object,
+        filling the defaults; two first writes at once make one, and the other is
+        refused with 409 `object_exists`. 404 for a `list` model.
+      security: [{ managementKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDraft" }
+      responses:
+        "200":
+          description: The content with its new draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`object_exists`: another first write made the object at the same time"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /admin/api/{space}/objects/{model}/publish:
+    post:
+      operationId: publishAdminObject
+      tags: [objects]
+      summary: Publish an object
+      description: |
+        As publishing a list content. Before its first write, `data` makes the
+        object, published; without `data` that is a 404; two first writes at
+        once make one, and the other is refused with 409 `object_exists`. 404 for
+        a `list` model.
+      security: [{ managementKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublishContent" }
+      responses:
+        "200":
+          description: The published content
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`object_exists`: another first write made the object at the same time"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /admin/api/{space}/objects/{model}/unpublish:
+    post:
+      operationId: unpublishAdminObject
+      tags: [objects]
+      summary: Unpublish an object
+      description: |
+        As unpublishing a list content. 404 for a `list` model, or before the
+        object's first write.
+      security: [{ managementKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+      responses:
+        "200":
+          description: The content, now a draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "409":
+          description: "`not_published`: the content is not published. `in_use`: other contents refer to it through a reference field of the current schema, one inside a custom field or a repeater's rows included; the message names how many"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/api/{space}/objects/{model}/discard-draft:
+    post:
+      operationId: discardAdminObjectDraft
+      tags: [objects]
+      summary: Discard the draft of an object
+      description: |
+        As discarding the draft of a list content. 404 for a `list` model, or
+        before the object's first write.
+      security: [{ managementKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+      responses:
+        "200":
+          description: The content, published only
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_published`: the content has no published version to fall back to. `no_draft`: it is published with no draft to discard"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /admin/api/{space}/objects/{model}/draft-key:
+    post:
+      operationId: getAdminObjectDraftKey
+      tags: [objects]
+      summary: The draft key of an object
+      description: |
+        As the draft key of a list content. 404 for a `list` model, or before the
+        object's first write.
+      security: [{ managementKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+      responses:
+        "200":
+          description: The key
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [draftKey]
+                properties:
+                  draftKey: { type: string, examples: ["3f1c…"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/api/{space}/keys:
     parameters:
       - $ref: "#/components/parameters/space"
     get:
@@ -636,6 +694,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DeliveryKeys" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       operationId: createDeliveryKey
@@ -662,8 +721,9 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
 
-  /admin/api/keys/{space}/{id}:
+  /admin/api/{space}/keys/{id}:
     delete:
       operationId: deleteDeliveryKey
       tags: [keys]
@@ -678,7 +738,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /admin/api/media/{space}:
+  /admin/api/{space}/media:
     parameters:
       - $ref: "#/components/parameters/space"
     get:
@@ -706,6 +766,7 @@ paths:
               schema: { $ref: "#/components/schemas/MediaList" }
         "400": { $ref: "#/components/responses/BadQuery" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       operationId: uploadMedia
@@ -747,7 +808,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "413":
-          description: "`too_large`: images over 20 MB, alone or together. A body over 21 MB gets 413 in plain text, with no error object."
+          description: "`too_large`: images over 20 MB, alone or together, or a request body over 21 MB"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
@@ -757,7 +818,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
 
-  /admin/api/media/{space}/{id}:
+  /admin/api/{space}/media/{id}:
     parameters:
       - $ref: "#/components/parameters/space"
       - $ref: "#/components/parameters/id"
@@ -768,11 +829,12 @@ paths:
       security: [{ managementKey: [] }]
       responses:
         "200":
-          description: The media plus `references`, the number of contents that use it in a `media` or `richtext` field of the current schema
+          description: The media plus `references`, the number of contents that use it in a `media` or `richtext` field of the current schema, one inside a custom field or a repeater's rows included
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MediaWithReferences" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       operationId: updateMedia
@@ -798,6 +860,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/TooLarge" }
     delete:
       operationId: deleteMedia
       tags: [media]
@@ -870,8 +933,16 @@ components:
         groups of `[and]` terms. Operators: `equals`, `not_equals`, `contains`,
         `not_contains`, `begins_with`, `exists`, `not_exists`, `less_than`,
         `greater_than`. On a `many` field, `equals` and `contains` mean "has
-        this value". On a `richtext` field, `contains`, `not_contains` and
-        `begins_with` read its text without tags. Example:
+        this value", and `not_equals` and `not_contains` "does not have this
+        value". On a `richtext` field, `contains`, `not_contains` and
+        `begins_with` read its text without tags. On a `custom` field only
+        `contains` and `not_contains` work: `contains` matches when one of its
+        text, textarea, slug or richtext fields contains the value,
+        `not_contains` when none does; any other operator, or `orders` on it,
+        is `bad_query`. One of those fields is named through its custom field,
+        as `meta.title[contains]x`, and takes only `contains` and
+        `not_contains`. A `repeater` field is the same as a custom field, over
+        the fields of every row. Example:
         `title[contains]lisp[and]publishedAt[exists]`.
     q:
       name: q
@@ -879,15 +950,19 @@ components:
       schema: { type: string }
       description: |
         Search: the text of the model's `text`, `textarea`, `slug` and `richtext`
-        fields contains it (rich text without its tags), or it is a content's
-        whole id. Applies together with `filters`.
+        fields, those inside a custom field or a repeater's rows included,
+        contains it (rich text
+        without its tags), or it is a content's whole id. Applies together with
+        `filters`.
     fields:
       name: fields
       in: query
       schema: { type: string }
       description: |
-        Comma-separated fields to keep in each content; applied after `include` and
-        media expansion. The system fields are always kept.
+        Comma-separated top-level fields to keep in each content; applied after
+        `include` and media expansion. A custom field or a repeater is kept
+        whole. The system
+        fields are always kept.
     include:
       name: include
       in: query
@@ -895,8 +970,14 @@ components:
       description: |
         Comma-separated reference fields to embed, dotted for nesting:
         `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
-        Only `reference` fields may be named. What is embedded is the referenced
-        contents' published data, with a `draftKey` too. Referenced contents that
+        Only `reference` fields may be named; one inside a custom field is named
+        through it, as `meta.author`, and a path ending at a custom field or at
+        anything else inside it is `bad_query`. One in a repeater's rows is named
+        through the repeater, as `blocks.by`, and embedded in each row whose
+        custom field has a reference named `by`, the other rows left as they
+        are; a path that reaches no reference is `bad_query`. What is embedded is the referenced
+        contents' published data, even when the request carries a `draftKey`;
+        an embedded content carries no draft key. Referenced contents that
         are missing or unpublished are dropped from a `many` field and `null` in a
         single one.
     draftKey:
@@ -912,7 +993,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ApiError" }
     BadQuery:
-      description: "`bad_query`: a malformed `filters`, an unknown field in `filters`/`orders`/`include`, or a bad integer"
+      description: "`bad_query`: a malformed `filters`, an unknown field in `filters`/`orders`/`include`, an unknown operator, an operator or an order a custom field, a field inside one or a repeater does not take, a value that is not a number for a `number` field or not `true`/`false` for a `boolean` one, an `include` path with a segment that is not a reference (or, on the way to one, a custom field or a repeater), or a bad integer"
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ApiError" }
@@ -927,12 +1008,17 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ApiError" }
     Forbidden:
-      description: "`forbidden`: the delivery or management key belongs to another space"
+      description: "`forbidden`: the delivery or management key belongs to another space; a space that does not exist is another space too"
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ApiError" }
     NotFound:
-      description: "`not_found`: unknown space, model, content, media or endpoint"
+      description: "`not_found`: unknown model, content, media or endpoint"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    TooLarge:
+      description: "`too_large`: the request body is over 21 MB"
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ApiError" }
@@ -987,11 +1073,11 @@ components:
       type: object
       required: [field, code, message]
       properties:
-        field: { type: string }
+        field: { type: string, examples: [title, meta.title, "blocks[1].text"] }
         code:
           type: string
           description: See SCHEMA.md "Content values"
-          examples: [required, unique, max_length, pattern, slug, integer, min, max, option, type, unknown_field]
+          examples: [required, unique, max_length, pattern, slug, integer, min, max, option, type, unknown_field, custom_field]
         message: { type: string }
 
     Me:
@@ -1009,10 +1095,31 @@ components:
         koyaSchema: { type: integer, const: 1 }
         webhooks:
           type: array
+          description: Responses always carry it.
           items: { $ref: "#/components/schemas/Webhook" }
         models:
           type: array
+          description: Responses always carry it.
           items: { $ref: "#/components/schemas/Model" }
+        customFields:
+          type: array
+          description: Omitted from the output when empty.
+          items: { $ref: "#/components/schemas/CustomField" }
+
+    CustomField:
+      type: object
+      description: |
+        A set of fields a model uses as one field of type `custom`, or as the
+        rows of a `repeater`. Its fields are any type but `slug`, `custom` and
+        `repeater`, none is `unique` or carries `was`, and none is named
+        `fieldId`, which names a repeater row's custom field.
+      required: [name, fields]
+      properties:
+        name: { $ref: "#/components/schemas/FieldName" }
+        fields:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/Field" }
 
     Model:
       type: object
@@ -1031,16 +1138,19 @@ components:
         label:
           type: string
           description: |
-            A text or slug field of this model, whose value the admin UI
+            A text or slug field of this model, not one inside a custom
+            field, whose value the admin UI
             shows for a content. Absent, a content is shown by its id.
         was:
           type: string
+          pattern: "^[a-z][a-z0-9-]*$"
           description: |
             The name this model had. A deploy renames it and moves its
             contents instead of dropping them; the stored schema keeps the
             new name alone, so a GET never returns it. See SCHEMA.md.
         fields:
           type: array
+          description: Responses always carry it.
           items: { $ref: "#/components/schemas/Field" }
 
     Field:
@@ -1061,6 +1171,8 @@ components:
         - $ref: "#/components/schemas/MediaField"
         - $ref: "#/components/schemas/ReferenceField"
         - $ref: "#/components/schemas/SlugField"
+        - $ref: "#/components/schemas/CustomFieldField"
+        - $ref: "#/components/schemas/RepeaterField"
       discriminator:
         propertyName: type
         mapping:
@@ -1075,11 +1187,18 @@ components:
           media: "#/components/schemas/MediaField"
           reference: "#/components/schemas/ReferenceField"
           slug: "#/components/schemas/SlugField"
+          custom: "#/components/schemas/CustomFieldField"
+          repeater: "#/components/schemas/RepeaterField"
 
     FieldName:
       type: string
       pattern: "^[a-z][a-zA-Z0-9]*$"
       description: Not one of the system fields `id`, `createdAt`, `updatedAt`, `publishedAt`, `revisedAt`.
+
+    FieldHelp:
+      type: string
+      minLength: 1
+      description: Shown under the field's name in the editor, to say what the field expects.
 
     TextField:
       type: object
@@ -1089,6 +1208,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: text }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
         maxLength: { type: integer, minimum: 1 }
         pattern: { type: string, description: A cl-ppcre (Perl-style) regular expression }
@@ -1102,6 +1222,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: textarea }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
         maxLength: { type: integer, minimum: 1 }
 
@@ -1113,6 +1234,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: richtext }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
 
     NumberField:
@@ -1123,6 +1245,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: number }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
         min: { type: number }
         max: { type: number }
@@ -1136,6 +1259,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: boolean }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
         default: { type: boolean, description: "`true` sets the field on a new content whose data does not mention it" }
 
@@ -1147,6 +1271,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: date }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
 
     DatetimeField:
@@ -1157,6 +1282,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: datetime }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
 
     SelectField:
@@ -1167,6 +1293,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: select }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
         options:
           type: array
@@ -1183,7 +1310,9 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: media }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
+        many: { type: boolean, description: "An array of media ids, kept in their order; delivered as media objects, a file that is gone dropping out" }
 
     ReferenceField:
       type: object
@@ -1193,6 +1322,7 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: reference }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
         model: { type: string, description: A model of the same schema }
         many: { type: boolean }
@@ -1205,10 +1335,45 @@ components:
         name: { $ref: "#/components/schemas/FieldName" }
         type: { type: string, const: slug }
         was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
         from: { type: string, description: "A text or textarea field of the same model, filled into a blank slug" }
         unique: { type: boolean }
         pattern: { type: string }
+
+    CustomFieldField:
+      type: object
+      required: [name, type, customField]
+      additionalProperties: false
+      description: Its value is an object of the custom field's fields' values.
+      properties:
+        name: { $ref: "#/components/schemas/FieldName" }
+        type: { type: string, const: custom }
+        was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
+        required: { type: boolean }
+        customField: { $ref: "#/components/schemas/FieldName", description: "A custom field of the same schema" }
+
+    RepeaterField:
+      type: object
+      required: [name, type, customFields]
+      additionalProperties: false
+      description: |
+        Its value is an array of rows, each an object naming its custom field
+        in `fieldId` beside that custom field's fields' values. Only in a
+        model, not inside a custom field.
+      properties:
+        name: { $ref: "#/components/schemas/FieldName" }
+        type: { type: string, const: repeater }
+        was: { $ref: "#/components/schemas/FieldName" }
+        help: { $ref: "#/components/schemas/FieldHelp" }
+        required: { type: boolean, description: "At least one row" }
+        customFields:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: Custom fields of the same schema a row may be.
+          items: { $ref: "#/components/schemas/FieldName" }
 
     Webhook:
       type: object
@@ -1218,15 +1383,18 @@ components:
         older schemas is ignored.
       required: [url]
       properties:
-        label: { type: string, description: "Defaults to `url`; always present on output" }
+        label: { type: string, minLength: 1, description: "Unique within the schema. Defaults to `url`; responses always carry it" }
         url:
           type: string
           pattern: "^[Hh][Tt][Tt][Pp][Ss]?://."
           description: Starts with `http://` or `https://`. See SCHEMA.md for which addresses are sent to.
         only:
-          type: array
-          description: Model names this webhook is narrowed to; absent means every model.
-          items: { type: string }
+          description: The model name, or model names without repeats, this webhook is narrowed to; absent means every model.
+          oneOf:
+            - { type: string, pattern: "^[a-z][a-z0-9-]*$" }
+            - type: array
+              uniqueItems: true
+              items: { type: string, pattern: "^[a-z][a-z0-9-]*$" }
 
     Change:
       type: object
@@ -1234,10 +1402,10 @@ components:
       properties:
         op:
           type: string
-          enum: [change_webhooks, add_model, remove_model, rename_model, change_kind,
+          enum: [change_webhooks, change_custom_fields, add_model, remove_model, rename_model, change_kind,
                  change_model_options, add_field, remove_field, rename_field,
                  change_field_type, change_field_options]
-        path: { type: string, examples: ["blog.title"] }
+        path: { type: string, description: "`webhooks`, `customFields`, `model`, `model.field`, or `model.field.subfield` inside a custom field (`model.field[customField].subfield` in a repeater)", examples: ["blog.title", "page.blocks[heading].level"] }
         destructive: { type: boolean }
         description: { type: string, examples: ["+ blog.title (text)"] }
         misfits:
@@ -1250,7 +1418,7 @@ components:
       required: [id, field, version, message]
       properties:
         id: { type: string }
-        field: { type: string }
+        field: { type: string, description: "The field, `field.subfield` inside a custom field, or `field[index]` / `field[index].subfield` in a repeater's row", examples: ["title", "blocks[1].text"] }
         version: { type: string, enum: [published, draft] }
         message: { type: string, examples: ["must be at most 50 characters"] }
 
@@ -1277,7 +1445,7 @@ components:
       required: [data]
       properties:
         data: { $ref: "#/components/schemas/ContentData" }
-        publish: { type: boolean, default: false }
+        publish: { type: [boolean, "null"], default: false, description: "`null` is as absent" }
         id:
           type: string
           pattern: "^[A-Za-z0-9_-]{1,64}$"
@@ -1296,14 +1464,19 @@ components:
     PublishContent:
       type: object
       properties:
-        data: { $ref: "#/components/schemas/ContentData" }
+        data:
+          description: "`null` is as absent"
+          oneOf: [{ $ref: "#/components/schemas/ContentData" }, { type: "null" }]
         publishedAt: { $ref: "#/components/schemas/Timestamp" }
 
     ContentData:
       type: object
       description: |
         Field name to value, as SCHEMA.md "Content values" defines them. Ids for
-        `media` and `reference` fields; arrays on `many` fields.
+        `media` and `reference` fields; arrays on `many` fields; an object of
+        its fields' values on a `custom` field; an array of rows on a
+        `repeater`, each an object naming its custom field in `fieldId` beside
+        that custom field's fields' values.
       additionalProperties: true
 
     Content:
@@ -1312,7 +1485,8 @@ components:
         Delivery shape: the data with the system fields merged in. `media` fields
         are expanded to Media objects (or `null` when the file is gone); `richtext`
         HTML has its `/media/` URLs made absolute; `reference` fields are ids
-        unless embedded through `include`. With `fields`, only the named data
+        unless embedded through `include`; the same goes for the fields inside
+        a `custom` field and a `repeater`'s rows, which keep their `fieldId`. With `fields`, only the named data
         fields are present; the system fields always are.
       required: [id, createdAt, updatedAt, publishedAt, revisedAt]
       properties:
@@ -1416,7 +1590,7 @@ components:
         - type: object
           required: [references]
           properties:
-            references: { type: integer, description: The number of contents that use it in a `media` or `richtext` field of the current schema }
+            references: { type: integer, description: The number of contents that use it in a `media` or `richtext` field of the current schema, one inside a custom field or a repeater's rows included }
 
     DeliveryKeys:
       type: object

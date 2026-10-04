@@ -51,6 +51,10 @@ preview pages.
 `KoyaModels` is what `koya types` writes (below). Without it every model and
 field is accepted and every content is `{ [field: string]: unknown }`.
 
+A reference inside a custom field or a repeater's rows is included through it:
+`include: ["meta.author", "blocks.by"]` embeds `author` in `meta`, and `by` in
+each row that has it.
+
 `fields` narrows the result type too: `fields: ["title"]` gives `{ title }`
 with the system fields (`id`, `createdAt`, `updatedAt`, `publishedAt`,
 `revisedAt`), which are always delivered. Errors are thrown as `KoyaError` with the server's `status`,
@@ -109,9 +113,17 @@ export default defineConfig({
           { name: "title", type: "text", required: true },
           { name: "slug", type: "slug", from: "title", unique: true },
           { name: "tags", type: "reference", model: "tag", many: true },
+          { name: "gallery", type: "media", many: true },
+          { name: "meta", type: "custom", customField: "seo" },
+          { name: "blocks", type: "repeater", customFields: ["heading", "quote"] },
         ],
       },
       { name: "tag", kind: "list", fields: [{ name: "name", type: "text", required: true }] },
+    ],
+    customFields: [
+      { name: "seo", fields: [{ name: "title", type: "text" }, { name: "image", type: "media", help: "1200x630" }] },
+      { name: "heading", fields: [{ name: "text", type: "text", required: true }] },
+      { name: "quote", fields: [{ name: "text", type: "textarea" }, { name: "by", type: "text" }] },
     ],
   }),
   types: { out: "src/koya.gen.ts" },
@@ -121,6 +133,17 @@ export default defineConfig({
 The document is the one koya's
 [SCHEMA.md](https://github.com/skyizwhite/koya/blob/master/docs/SCHEMA.md)
 specifies, typed field by field. The space itself is made in koya's admin UI.
+
+A custom field is a set of fields defined once in `customFields`: a `custom`
+field holds one of them as an object, and a `repeater` holds any number of rows,
+each naming its custom field in `fieldId`. A `media` field with `many` holds
+several files in order. `help` on any field is shown under it in the editor,
+and on the generated property.
+
+`koya types` types a custom field's value as its own `<Name>Data` /
+`<Name>Fields` pair (`SeoData`, `SeoFields`), a repeater's as an array of
+`{ fieldId: "heading" } & HeadingData` rows, and a `many` media field's as
+`Media[]` when delivered: a file that is gone drops out.
 
 ```json
 {
@@ -137,7 +160,7 @@ specifies, typed field by field. The space itself is made in koya's admin UI.
 | `koya plan` | what `deploy` would change; `!` marks a destructive change, and the contents a tightened option would leave out of fit are listed under it |
 | `koya deploy` | deploys the schema. Destructive changes are asked about on a terminal and refused elsewhere, unless `--force`; while stored contents do not fit, it is refused whatever `--force` says |
 | `koya pull [-o file]` | the deployed schema as JSON |
-| `koya types [--from config\|server\|file.json] [-o file]` | writes `KoyaModels` and a `<Model>Data` / `<Model>Fields` pair per model |
+| `koya types [--from config\|server\|file.json] [-o file]` | writes `KoyaModels` and a `<Name>Data` / `<Name>Fields` pair per model and per custom field a model uses |
 
 `types` reads the config's schema when it has one, the server's otherwise — so a
 project whose schema lives elsewhere (a Lisp site, say) can still type its content.

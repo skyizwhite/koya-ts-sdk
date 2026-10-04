@@ -7,13 +7,16 @@
       "kind": "list",
       "label": "title",
       "fields": [
-        { "name": "title", "type": "text", "required": true },
+        { "name": "title", "type": "text", "required": true, "help": "Shown in lists and the page title" },
         { "name": "slug", "type": "slug", "from": "title", "unique": true },
         { "name": "cover", "type": "media" },
         { "name": "content", "type": "richtext" },
         { "name": "category", "type": "select", "options": ["tech", "life"] },
         { "name": "author", "type": "reference", "model": "author" },
-        { "name": "tags", "type": "reference", "model": "tag", "many": true }
+        { "name": "tags", "type": "reference", "model": "tag", "many": true },
+        { "name": "gallery", "type": "media", "many": true },
+        { "name": "meta", "type": "custom", "customField": "seo" },
+        { "name": "blocks", "type": "repeater", "customFields": ["heading", "quote"], "required": true }
       ]
     },
     {
@@ -34,5 +37,24 @@
         { "name": "postsPerPage", "type": "number", "integer": true, "min": 1 }
       ]
     }
+  ],
+  "customFields": [
+    {
+      "name": "seo",
+      "fields": [
+        { "name": "title", "type": "text", "maxLength": 60 },
+        { "name": "image", "type": "media", "help": "1200x630" },
+        { "name": "author", "type": "reference", "model": "author" }
+      ]
+    },
+    { "name": "heading", "fields": [{ "name": "text", "type": "text", "required": true }] },
+    {
+      "name": "quote",
+      "fields": [
+        { "name": "text", "type": "textarea", "required": true },
+        { "name": "by", "type": "reference", "model": "author", "many": true }
+      ]
+    },
+    { "name": "footer", "fields": [{ "name": "note", "type": "text" }] }
   ]
 }

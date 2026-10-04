@@ -4,6 +4,7 @@ import type * as koya from "../../src/index.ts";
 
 /** `blog` as stored: media and references are ids. */
 export interface BlogData {
+  /** Shown in lists and the page title */
   title: string;
   slug?: string | null;
   cover?: string | null;
@@ -11,10 +12,14 @@ export interface BlogData {
   category?: "tech" | "life" | null;
   author?: string | null;
   tags?: string[] | null;
+  gallery?: string[] | null;
+  meta?: SeoData | null;
+  blocks: (({ fieldId: "heading" } & HeadingData) | ({ fieldId: "quote" } & QuoteData))[];
 }
 
 /** `blog` as delivered, without the system fields. */
 export interface BlogFields {
+  /** Shown in lists and the page title */
   title: string;
   slug?: string | null;
   cover?: koya.Media | null;
@@ -22,6 +27,9 @@ export interface BlogFields {
   category?: "tech" | "life" | null;
   author?: string | null;
   tags?: string[] | null;
+  gallery?: koya.Media[] | null;
+  meta?: SeoFields | null;
+  blocks: (({ fieldId: "heading" } & HeadingFields) | ({ fieldId: "quote" } & QuoteFields))[];
 }
 
 /** `author` as stored: media and references are ids. */
@@ -60,12 +68,50 @@ export interface SiteSettingsFields {
   postsPerPage?: number | null;
 }
 
+/** The custom field `seo` as stored: media and references are ids. */
+export interface SeoData {
+  title?: string | null;
+  /** 1200x630 */
+  image?: string | null;
+  author?: string | null;
+}
+
+/** The custom field `seo` as delivered. */
+export interface SeoFields {
+  title?: string | null;
+  /** 1200x630 */
+  image?: koya.Media | null;
+  author?: string | null;
+}
+
+/** The custom field `heading` as stored: media and references are ids. */
+export interface HeadingData {
+  text: string;
+}
+
+/** The custom field `heading` as delivered. */
+export interface HeadingFields {
+  text: string;
+}
+
+/** The custom field `quote` as stored: media and references are ids. */
+export interface QuoteData {
+  text: string;
+  by?: string[] | null;
+}
+
+/** The custom field `quote` as delivered. */
+export interface QuoteFields {
+  text: string;
+  by?: string[] | null;
+}
+
 export type KoyaModels = {
   "blog": {
     kind: "list";
     data: BlogData;
     fields: BlogFields;
-    refs: { "author": { model: "author"; many: false }; "tags": { model: "tag"; many: true } };
+    refs: { "author": { model: "author"; many: false }; "tags": { model: "tag"; many: true }; "meta": { custom: { "author": { model: "author"; many: false } } }; "blocks": { rows: { "quote": { "by": { model: "author"; many: true } } } } };
   };
   "author": {
     kind: "list";

@@ -29,22 +29,22 @@ const server = createServer(async (req, res) => {
     res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
     res.end(JSON.stringify(value));
   };
-  if (req.method === "POST" && req.url === "/admin/api/schema/site/plan") {
+  if (req.method === "POST" && req.url === "/admin/api/site/schema/plan") {
     return send(200, { changes: [{ op: "add_model", path: "tag", destructive: false, description: "+ tag" }, destructive], destructive: true });
   }
-  if (req.method === "PUT" && req.url === "/admin/api/schema/site") {
+  if (req.method === "PUT" && req.url === "/admin/api/site/schema") {
     return send(409, { error: { code: "destructive_changes", message: "retry with force=true", details: [destructive] } });
   }
-  if (req.method === "PUT" && req.url === "/admin/api/schema/site?force=true") {
+  if (req.method === "PUT" && req.url === "/admin/api/site/schema?force=true") {
     return send(200, { applied: [destructive], schema: JSON.parse(body) });
   }
-  if (req.method === "POST" && req.url === "/admin/api/schema/fit/plan") {
+  if (req.method === "POST" && req.url === "/admin/api/fit/schema/plan") {
     return send(200, { changes: [tightened], destructive: false });
   }
-  if (req.method === "PUT" && req.url?.startsWith("/admin/api/schema/fit")) {
+  if (req.method === "PUT" && req.url?.startsWith("/admin/api/fit/schema")) {
     return send(409, { error: { code: "contents_do_not_fit", message: "Some contents do not fit", details: [tightened] } });
   }
-  if (req.method === "GET" && req.url === "/admin/api/schema/site") {
+  if (req.method === "GET" && req.url === "/admin/api/site/schema") {
     return send(200, { koyaSchema: 1, models: [{ name: "tag", kind: "list", fields: [{ name: "name", type: "text" }] }] });
   }
   send(404, { error: { code: "not_found", message: "No such endpoint" } });
@@ -139,6 +139,6 @@ test("deploy is refused while contents do not fit, and force is not tried", asyn
   assert.match(stdout, /^ {4}t1 name \(draft\): is required$/m);
   assert.deepEqual(
     requests.map((r) => r.url),
-    ["/admin/api/schema/fit"],
+    ["/admin/api/fit/schema"],
   );
 });

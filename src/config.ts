@@ -1,7 +1,7 @@
-import type { Field, Model, Schema, Webhook } from "./generated/koya.ts";
+import type { CustomField, Field, Model, Schema, Webhook } from "./generated/koya.ts";
 
 /** A schema document (`koyaSchema: 1`), as SCHEMA.md in koya specifies it. */
-export function defineSchema(schema: { webhooks?: Webhook[]; models: Model[] }): Schema {
+export function defineSchema(schema: { webhooks?: Webhook[]; models: Model[]; customFields?: CustomField[] }): Schema {
   return { koyaSchema: 1, ...schema };
 }
 
@@ -26,4 +26,4 @@ export function defineConfig(config: Config): Config {
   return config;
 }
 
-export type { Field, Model, Schema, Webhook };
+export type { CustomField, Field, Model, Schema, Webhook };

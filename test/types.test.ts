@@ -19,6 +19,19 @@ expect<Equal<NonNullable<BlogWithTags["author"]>["mentor"], Delivered<M, "author
 expect<Equal<Delivered<M, "blog", "tags">["author"], string | null | undefined>>();
 expect<Equal<Delivered<M, "author", "mentor.mentor">["mentor"], Delivered<M, "author", "mentor"> | null | undefined>>();
 
+// custom fields and repeaters: media expanded when delivered, references ids unless included through them
+expect<Equal<Blog["gallery"], Media[] | null | undefined>>();
+expect<Equal<M["blog"]["data"]["gallery"], string[] | null | undefined>>();
+expect<Equal<NonNullable<Blog["meta"]>["image"], Media | null | undefined>>();
+expect<Equal<NonNullable<Blog["meta"]>["author"], string | null | undefined>>();
+expect<Equal<NonNullable<Delivered<M, "blog", "meta.author.mentor">["meta"]>["author"], Delivered<M, "author", "mentor"> | null | undefined>>();
+type Block = Blog["blocks"][number];
+expect<Equal<Extract<Block, { fieldId: "quote" }>["by"], string[] | null | undefined>>();
+type BlockWithBy = Delivered<M, "blog", "blocks.by">["blocks"][number];
+expect<Equal<Extract<BlockWithBy, { fieldId: "quote" }>["by"], Delivered<M, "author">[] | null | undefined>>();
+expect<Equal<Extract<BlockWithBy, { fieldId: "heading" }>["text"], string>>();
+expect<Equal<M["blog"]["data"]["blocks"][number]["fieldId"], "heading" | "quote">>();
+
 declare const client: Client<M>;
 async function calls() {
   const page = await client.getList("blog", { fields: ["title"] });
@@ -32,6 +45,11 @@ async function calls() {
   client.getList("blog", { include: ["title"] });
   // @ts-expect-error nor a media field inside an embedded content
   client.getList("blog", { include: ["author.avatar"] });
+  client.getList("blog", { include: ["meta.author.mentor", "blocks.by"] });
+  // @ts-expect-error a custom field is included through its references, not whole
+  client.getList("blog", { include: ["meta"] });
+  // @ts-expect-error nor a repeater
+  client.getList("blog", { include: ["blocks"] });
   // @ts-expect-error a list model is not an object
   client.getObject("blog");
 }
