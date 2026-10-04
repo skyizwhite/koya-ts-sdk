@@ -31,10 +31,10 @@ test("getList sends the delivery key and joins list parameters", async () => {
   });
 });
 
-test("getItem and getObject address the content and pass the draft key", async () => {
+test("getListContent and getObject address the content and pass the draft key", async () => {
   const { fetch, calls } = mockFetch({ body: { id: "a" } }, { body: { id: "b" } });
   const client = createClient<KoyaModels>({ ...options, fetch });
-  await client.getItem("blog", "a", { draftKey: "dk" });
+  await client.getListContent("blog", "a", { draftKey: "dk" });
   await client.getObject("site-settings");
   assert.equal(calls[0]?.url.pathname, "/api/v1/website/lists/blog/a");
   assert.equal(calls[0]?.url.searchParams.get("draftKey"), "dk");
@@ -57,5 +57,5 @@ test("an error answer becomes a KoyaError with the server's code", async () => {
 test("a non-JSON error still becomes a KoyaError", async () => {
   const fetch = (async () => new Response("Bad Gateway", { status: 502 })) as typeof globalThis.fetch;
   const client = createClient({ ...options, fetch });
-  await assert.rejects(client.getItem("blog", "a"), { name: "KoyaError", status: 502, code: "http_error" });
+  await assert.rejects(client.getListContent("blog", "a"), { name: "KoyaError", status: 502, code: "http_error" });
 });

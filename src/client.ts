@@ -21,7 +21,7 @@ export interface ClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
-export interface ItemQuery<M extends ModelMap, K extends keyof M, I extends string, F extends string> {
+export interface ContentQuery<M extends ModelMap, K extends keyof M, I extends string, F extends string> {
   /** Reference fields to embed, dotted for nesting: `["tags", "author.avatar"]`. */
   include?: readonly I[];
   /** Fields to keep in each content; the system fields are always kept. */
@@ -31,7 +31,7 @@ export interface ItemQuery<M extends ModelMap, K extends keyof M, I extends stri
 }
 
 export interface ListQuery<M extends ModelMap, K extends keyof M, I extends string, F extends string>
-  extends Omit<ItemQuery<M, K, I, F>, "draftKey"> {
+  extends Omit<ContentQuery<M, K, I, F>, "draftKey"> {
   limit?: number;
   offset?: number;
   /** Field names, `-` for descending: `["-publishedAt", "title"]`. */
@@ -90,10 +90,10 @@ export function createClient<M extends ModelMap = AnyModels>(options: ClientOpti
     },
 
     /** One published content of a `list` model, or its draft with `draftKey`. */
-    getItem<K extends ListModels<M>, const I extends IncludePath<M, K> = never, const F extends FieldName<M, K> = never>(
+    getListContent<K extends ListModels<M>, const I extends IncludePath<M, K> = never, const F extends FieldName<M, K> = never>(
       model: K,
       id: string,
-      query?: ItemQuery<M, K, I, F>,
+      query?: ContentQuery<M, K, I, F>,
     ): Promise<Result<M, K, I, F>> {
       return getListContent(space, model, id, params(query), { transport }) as Promise<any>;
     },
@@ -101,7 +101,7 @@ export function createClient<M extends ModelMap = AnyModels>(options: ClientOpti
     /** The content of an `object` model, or its draft with `draftKey`. */
     getObject<K extends ObjectModels<M>, const I extends IncludePath<M, K> = never, const F extends FieldName<M, K> = never>(
       model: K,
-      query?: ItemQuery<M, K, I, F>,
+      query?: ContentQuery<M, K, I, F>,
     ): Promise<Result<M, K, I, F>> {
       return getObject(space, model, params(query), { transport }) as Promise<any>;
     },

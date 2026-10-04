@@ -1,5 +1,5 @@
 export { createClient } from "./client.ts";
-export type { Client, ClientOptions, ContentList, ItemQuery, ListQuery } from "./client.ts";
+export type { Client, ClientOptions, ContentList, ContentQuery, ListQuery } from "./client.ts";
 export { createAdminClient } from "./admin.ts";
 export type {
   AdminClient,

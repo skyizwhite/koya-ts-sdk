@@ -84,7 +84,7 @@ async function confirm(question: string): Promise<boolean> {
 
 async function deploy(client: ReturnType<typeof admin>, schema: Schema, force: boolean): Promise<number> {
   try {
-    const { applied } = await client.schema.deploy(schema, { force });
+    const { applied } = await client.deploySchema(schema, { force });
     console.log(`Applied ${applied.length} change${applied.length === 1 ? "" : "s"}.`);
     return 0;
   } catch (e) {
@@ -128,14 +128,14 @@ async function main(argv: string[]): Promise<number> {
 
   switch (command) {
     case "plan": {
-      const plan = await admin(config, values.space).schema.plan(configSchema(config));
+      const plan = await admin(config, values.space).planSchema(configSchema(config));
       printChanges(plan.changes);
       return 0;
     }
     case "deploy":
       return deploy(admin(config, values.space), configSchema(config), values.force);
     case "pull": {
-      const json = JSON.stringify(await admin(config, values.space).schema.get(), null, 2) + "\n";
+      const json = JSON.stringify(await admin(config, values.space).getSchema(), null, 2) + "\n";
       if (values.out) await writeFile(values.out, json);
       else process.stdout.write(json);
       return 0;
@@ -146,7 +146,7 @@ async function main(argv: string[]): Promise<number> {
         from === "config"
           ? configSchema(config)
           : from === "server"
-            ? await admin(config, values.space).schema.get()
+            ? await admin(config, values.space).getSchema()
             : (JSON.parse(await readFile(from, "utf8")) as Schema);
       const out = values.out ?? resolve(dir, config.types?.out ?? "koya.gen.ts");
       await writeFile(out, generateTypes(schema));

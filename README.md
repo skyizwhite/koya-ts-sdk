@@ -3,7 +3,7 @@
 A TypeScript client for [koya](https://github.com/skyizwhite/koya), a
 self-hosted headless CMS:
 
-- **Delivery API** — `getList` / `getItem` / `getObject`, typed by model,
+- **Delivery API** — `getList` / `getListContent` / `getObject`, typed by model,
   `include` and `fields` included.
 - **Admin API** — schema, contents, delivery keys and media, with a management key.
 - **A `koya` CLI** — `plan`, `deploy`, `pull` and `types`, to run from npm scripts.
@@ -39,7 +39,7 @@ contents[0]?.tags; // the tag contents; ids when not included
 
 const found = await koya.getList("blog", { q: "macros" }); // the text fields, rich text as its text, or a whole id
 
-const post = await koya.getItem("blog", id, { draftKey }); // a draft, for previews
+const post = await koya.getListContent("blog", id, { draftKey }); // a draft, for previews
 const about = await koya.getObject("about");
 ```
 
@@ -74,23 +74,23 @@ const admin = createAdminClient<KoyaModels>({
   managementKey: process.env.KOYA_MANAGEMENT_KEY!,
 });
 
-const [cover] = await admin.media.upload(new File([await openAsBlob("cover.png")], "cover.png"), { alt: "Cover" });
-const post = await admin.contents.create("blog", { title: "Hello", cover: cover!.id }); // a draft
-await admin.contents.updateDraft("blog", post.id, { slug: null }); // null removes a key
-await admin.contents.publish("blog", post.id);
+const [cover] = await admin.uploadMedia(new File([await openAsBlob("cover.png")], "cover.png"), { alt: "Cover" });
+const post = await admin.createListContent("blog", { title: "Hello", cover: cover!.id }); // a draft
+await admin.updateListContent("blog", post.id, { slug: null }); // null removes a key
+await admin.publishListContent("blog", post.id);
 
-await admin.objects.save("about", { body: "<p>Hi</p>" }); // an object model's content: no id
-await admin.objects.publish("about");
+await admin.updateObject("about", { body: "<p>Hi</p>" }); // an object model's content: no id
+await admin.publishObject("about");
 ```
 
 | | |
 |---|---|
-| `admin.me()` | the key's space and the server version |
-| `admin.schema` | `get`, `plan(schema)`, `deploy(schema, { force })` |
-| `admin.contents` | a `list` model's contents: `list` (with `q`), `get`, `create`, `updateDraft`, `publish`, `unpublish`, `discardDraft`, `delete`, `draftKey` |
-| `admin.objects` | an `object` model's content, through the model: `get`, `save` (the first save makes it), `publish`, `unpublish`, `discardDraft`, `draftKey` |
-| `admin.deliveryKeys` | `list` (with the webhook secret), `create(label)`, `delete(id)` |
-| `admin.media` | `list`, `get`, `upload`, `update(id, { alt })`, `delete` |
+| the key | `getMe()`: its space and the server version |
+| the schema | `getSchema()`, `planSchema(schema)`, `deploySchema(schema, { force })` |
+| a `list` model's contents, through their ids | `getList` (with `q`), `getListContent`, `createListContent`, `updateListContent`, `publishListContent`, `unpublishListContent`, `discardListContentDraft`, `deleteListContent`, `getListContentDraftKey` |
+| an `object` model's content, through the model | `getObject`, `updateObject` (the first update makes it), `publishObject`, `unpublishObject`, `discardObjectDraft`, `getObjectDraftKey` |
+| delivery keys | `listDeliveryKeys` (with the webhook secret), `createDeliveryKey(label)`, `deleteDeliveryKey(id)` |
+| media | `listMedia`, `getMedia`, `uploadMedia`, `updateMedia(id, { alt })`, `deleteMedia` |
 
 ## The CLI
 
@@ -112,6 +112,8 @@ export default defineConfig({
         fields: [
           { name: "title", type: "text", required: true },
           { name: "slug", type: "slug", from: "title", unique: true },
+          { name: "cover", type: "media" },
+          { name: "author", type: "reference", model: "author" },
           { name: "tags", type: "reference", model: "tag", many: true },
           { name: "gallery", type: "media", many: true },
           { name: "meta", type: "custom", customField: "seo" },
@@ -119,7 +121,16 @@ export default defineConfig({
         ],
       },
       { name: "tag", kind: "list", fields: [{ name: "name", type: "text", required: true }] },
-      { name: "author", kind: "list", fields: [{ name: "name", type: "text", required: true }] },
+      {
+        name: "author",
+        kind: "list",
+        fields: [
+          { name: "name", type: "text", required: true },
+          { name: "team", type: "reference", model: "team" },
+        ],
+      },
+      { name: "team", kind: "list", fields: [{ name: "name", type: "text", required: true }] },
+      { name: "about", kind: "object", fields: [{ name: "body", type: "richtext" }] },
     ],
     customFields: [
       {

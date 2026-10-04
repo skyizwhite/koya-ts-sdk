@@ -9,7 +9,7 @@ const schema = defineSchema({ models: [{ name: "tag", kind: "list", fields: [{ n
 
 test("the admin API is called with the management key as a Bearer token", async () => {
   const { fetch, calls } = mockFetch({ body: { owner: false, management: true, space: "website", version: "0.8.0" } });
-  const me = await createAdminClient({ ...options, fetch }).me();
+  const me = await createAdminClient({ ...options, fetch }).getMe();
   assert.equal(me.space, "website");
   assert.equal(calls[0]?.url.pathname, "/admin/api/me");
   assert.equal(calls[0]?.headers.get("authorization"), "Bearer koya_mgmt_x");
@@ -20,8 +20,8 @@ test("deploy sends the schema, with force=true only when asked", async () => {
   const answer = { body: { applied: [], schema } };
   const { fetch, calls } = mockFetch(answer, answer);
   const admin = createAdminClient({ ...options, fetch });
-  await admin.schema.deploy(schema);
-  await admin.schema.deploy(schema, { force: true });
+  await admin.deploySchema(schema);
+  await admin.deploySchema(schema, { force: true });
   assert.equal(calls[0]?.method, "PUT");
   assert.equal(calls[0]?.url.pathname, "/admin/api/website/schema");
   assert.equal(calls[0]?.url.search, "");
@@ -32,10 +32,10 @@ test("deploy sends the schema, with force=true only when asked", async () => {
 test("content writes send what the admin API takes", async () => {
   const { fetch, calls } = mockFetch({ status: 201, body: {} }, { body: {} }, { body: {} }, { body: { draftKey: "dk" } });
   const admin = createAdminClient<KoyaModels>({ ...options, fetch });
-  await admin.contents.create("blog", { title: "Hello", tags: ["t1"] }, { publish: true, id: "hello" });
-  await admin.contents.updateDraft("blog", "hello", { slug: null });
-  await admin.contents.publish("blog", "hello", { publishedAt: "2026-09-20T00:00:00.000Z" });
-  assert.equal(await admin.contents.draftKey("blog", "hello"), "dk");
+  await admin.createListContent("blog", { title: "Hello", tags: ["t1"] }, { publish: true, id: "hello" });
+  await admin.updateListContent("blog", "hello", { slug: null });
+  await admin.publishListContent("blog", "hello", { publishedAt: "2026-09-20T00:00:00.000Z" });
+  assert.equal(await admin.getListContentDraftKey("blog", "hello"), "dk");
   assert.equal(calls[0]?.url.pathname, "/admin/api/website/lists/blog");
   assert.deepEqual(JSON.parse(String(calls[0]?.body)), { data: { title: "Hello", tags: ["t1"] }, publish: true, id: "hello" });
   assert.equal(calls[1]?.method, "PATCH");
@@ -49,12 +49,12 @@ test("an object model's content is reached through its model, without an id", as
     { body: {} }, { body: {} }, { body: {} }, { body: {} }, { body: {} }, { body: { draftKey: "dk" } },
   );
   const admin = createAdminClient<KoyaModels>({ ...options, fetch });
-  await admin.objects.get("site-settings");
-  await admin.objects.save("site-settings", { maintenance: true });
-  await admin.objects.publish("site-settings", { data: { maintenance: true }, publishedAt: "2026-10-05T00:00:00.000Z" });
-  await admin.objects.unpublish("site-settings");
-  await admin.objects.discardDraft("site-settings");
-  assert.equal(await admin.objects.draftKey("site-settings"), "dk");
+  await admin.getObject("site-settings");
+  await admin.updateObject("site-settings", { maintenance: true });
+  await admin.publishObject("site-settings", { data: { maintenance: true }, publishedAt: "2026-10-05T00:00:00.000Z" });
+  await admin.unpublishObject("site-settings");
+  await admin.discardObjectDraft("site-settings");
+  assert.equal(await admin.getObjectDraftKey("site-settings"), "dk");
   const base = "/admin/api/website/objects/site-settings";
   assert.deepEqual(
     calls.map((c) => `${c.method} ${c.url.pathname}`),
@@ -66,7 +66,7 @@ test("an object model's content is reached through its model, without an id", as
 
 test("the admin list searches with q", async () => {
   const { fetch, calls } = mockFetch({ body: { contents: [], totalCount: 0, offset: 0, limit: 10 } });
-  await createAdminClient<KoyaModels>({ ...options, fetch }).contents.list("blog", { q: "macros", filters: "title[exists]" });
+  await createAdminClient<KoyaModels>({ ...options, fetch }).getList("blog", { q: "macros", filters: "title[exists]" });
   assert.equal(calls[0]?.url.pathname, "/admin/api/website/lists/blog");
   assert.deepEqual(Object.fromEntries(calls[0]!.url.searchParams), { q: "macros", filters: "title[exists]" });
 });
@@ -74,7 +74,7 @@ test("the admin list searches with q", async () => {
 test("media upload is multipart with one file part per file", async () => {
   const { fetch, calls } = mockFetch({ status: 201, body: { media: [{ id: "m1" }, { id: "m2" }] } });
   const admin = createAdminClient({ ...options, fetch });
-  const media = await admin.media.upload([new File(["a"], "a.png"), new File(["b"], "b.png")], { alt: "Cover" });
+  const media = await admin.uploadMedia([new File(["a"], "a.png"), new File(["b"], "b.png")], { alt: "Cover" });
   assert.deepEqual(media.map((m) => m.id), ["m1", "m2"]);
   const form = calls[0]?.body;
   assert.ok(form instanceof FormData);

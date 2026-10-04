@@ -57,15 +57,15 @@ void calls;
 
 declare const admin: AdminClient<M>;
 async function adminCalls() {
-  const settings = await admin.objects.get("site-settings");
+  const settings = await admin.getObject("site-settings");
   expect<Equal<typeof settings.published, M["site-settings"]["data"] | null>>();
-  await admin.objects.save("site-settings", { maintenance: true });
+  await admin.updateObject("site-settings", { maintenance: true });
   // @ts-expect-error a list model's contents are reached through their ids
-  admin.objects.get("blog");
+  admin.getObject("blog");
   // @ts-expect-error an object model's content is reached through the model
-  admin.contents.get("site-settings", "id");
+  admin.getListContent("site-settings", "id");
   // @ts-expect-error nor made as one of many
-  admin.contents.create("site-settings", {});
+  admin.createListContent("site-settings", {});
 }
 void adminCalls;
 
@@ -73,7 +73,7 @@ declare const untyped: Client;
 async function untypedCalls() {
   const page = await untyped.getList("anything", { include: ["a.b"], fields: ["id", "x"] });
   expect<Equal<(typeof page.contents)[number]["x"], unknown>>();
-  const item = await untyped.getItem("anything", "id");
+  const item = await untyped.getListContent("anything", "id");
   expect<Equal<typeof item.id, string>>();
   await untyped.getObject("settings");
 }
