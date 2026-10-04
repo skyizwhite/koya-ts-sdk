@@ -11,7 +11,7 @@ self-hosted headless CMS:
 ESM, nothing at runtime but `fetch`: Node 22.18+, Deno, Bun, edge runtimes.
 
 ```sh
-npm install github:skyizwhite/koya-ts-sdk#v0.4.0
+npm install github:skyizwhite/koya-ts-sdk#v0.5.0
 ```
 
 It is not on the npm registry yet. npm builds `dist/` on install, so the first
@@ -119,11 +119,19 @@ export default defineConfig({
         ],
       },
       { name: "tag", kind: "list", fields: [{ name: "name", type: "text", required: true }] },
+      { name: "author", kind: "list", fields: [{ name: "name", type: "text", required: true }] },
     ],
     customFields: [
-      { name: "seo", fields: [{ name: "title", type: "text" }, { name: "image", type: "media", help: "1200x630" }] },
+      {
+        name: "seo",
+        fields: [
+          { name: "title", type: "text" },
+          { name: "image", type: "media", help: "1200x630" },
+          { name: "author", type: "reference", model: "author" },
+        ],
+      },
       { name: "heading", fields: [{ name: "text", type: "text", required: true }] },
-      { name: "quote", fields: [{ name: "text", type: "textarea" }, { name: "by", type: "text" }] },
+      { name: "quote", fields: [{ name: "text", type: "textarea" }, { name: "by", type: "reference", model: "author" }] },
     ],
   }),
   types: { out: "src/koya.gen.ts" },
