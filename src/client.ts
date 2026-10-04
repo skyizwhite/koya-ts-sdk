@@ -38,6 +38,8 @@ export interface ListQuery<M extends ModelMap, K extends keyof M, I extends stri
   orders?: string | readonly string[];
   /** `title[contains]lisp[and]publishedAt[exists]`; see the delivery API. */
   filters?: string;
+  /** Search: the text of the model's text, textarea, slug and rich text fields contains it, or it is a whole id. */
+  q?: string;
 }
 
 export interface ContentList<T> {
@@ -61,6 +63,7 @@ function params(query: ListQuery<any, any, string, string> & { draftKey?: string
   const orders = joined(query.orders);
   if (orders) out.orders = orders;
   if (query.filters) out.filters = query.filters;
+  if (query.q) out.q = query.q;
   const fields = joined(query.fields);
   if (fields) out.fields = fields;
   const include = joined(query.include);

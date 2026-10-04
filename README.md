@@ -11,7 +11,7 @@ self-hosted headless CMS:
 ESM, nothing at runtime but `fetch`: Node 22.18+, Deno, Bun, edge runtimes.
 
 ```sh
-npm install github:skyizwhite/koya-ts-sdk#v0.3.0
+npm install github:skyizwhite/koya-ts-sdk#v0.4.0
 ```
 
 It is not on the npm registry yet. npm builds `dist/` on install, so the first
@@ -36,6 +36,8 @@ const { contents, totalCount } = await koya.getList("blog", {
   include: ["tags", "author.team"], // embeds tags, author, and team inside author
 });
 contents[0]?.tags; // the tag contents; ids when not included
+
+const found = await koya.getList("blog", { q: "macros" }); // the text fields, rich text as its text, or a whole id
 
 const post = await koya.getItem("blog", id, { draftKey }); // a draft, for previews
 const about = await koya.getObject("about");
@@ -72,13 +74,17 @@ const [cover] = await admin.media.upload(new File([await openAsBlob("cover.png")
 const post = await admin.contents.create("blog", { title: "Hello", cover: cover!.id }); // a draft
 await admin.contents.updateDraft("blog", post.id, { slug: null }); // null removes a key
 await admin.contents.publish("blog", post.id);
+
+await admin.objects.save("about", { body: "<p>Hi</p>" }); // an object model's content: no id
+await admin.objects.publish("about");
 ```
 
 | | |
 |---|---|
 | `admin.me()` | the key's space and the server version |
 | `admin.schema` | `get`, `plan(schema)`, `deploy(schema, { force })` |
-| `admin.contents` | `list`, `get`, `create`, `updateDraft`, `publish`, `unpublish`, `discardDraft`, `delete`, `draftKey` |
+| `admin.contents` | a `list` model's contents: `list` (with `q`), `get`, `create`, `updateDraft`, `publish`, `unpublish`, `discardDraft`, `delete`, `draftKey` |
+| `admin.objects` | an `object` model's content, through the model: `get`, `save` (the first save makes it), `publish`, `unpublish`, `discardDraft`, `draftKey` |
 | `admin.deliveryKeys` | `list` (with the webhook secret), `create(label)`, `delete(id)` |
 | `admin.media` | `list`, `get`, `upload`, `update(id, { alt })`, `delete` |
 

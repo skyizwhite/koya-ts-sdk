@@ -43,6 +43,32 @@ test("content writes send what the admin API takes", async () => {
   assert.equal(calls[3]?.url.pathname, "/admin/api/contents/website/blog/hello/draft-key");
 });
 
+test("an object model's content is reached through its model, without an id", async () => {
+  const { fetch, calls } = mockFetch(
+    { body: {} }, { body: {} }, { body: {} }, { body: {} }, { body: {} }, { body: { draftKey: "dk" } },
+  );
+  const admin = createAdminClient<KoyaModels>({ ...options, fetch });
+  await admin.objects.get("site-settings");
+  await admin.objects.save("site-settings", { maintenance: true });
+  await admin.objects.publish("site-settings", { data: { maintenance: true }, publishedAt: "2026-10-05T00:00:00.000Z" });
+  await admin.objects.unpublish("site-settings");
+  await admin.objects.discardDraft("site-settings");
+  assert.equal(await admin.objects.draftKey("site-settings"), "dk");
+  const base = "/admin/api/contents/website/site-settings";
+  assert.deepEqual(
+    calls.map((c) => `${c.method} ${c.url.pathname}`),
+    [`GET ${base}`, `PATCH ${base}`, `POST ${base}/publish`, `POST ${base}/unpublish`, `POST ${base}/discard-draft`, `POST ${base}/draft-key`],
+  );
+  assert.deepEqual(JSON.parse(String(calls[1]?.body)), { data: { maintenance: true } });
+  assert.deepEqual(JSON.parse(String(calls[2]?.body)), { data: { maintenance: true }, publishedAt: "2026-10-05T00:00:00.000Z" });
+});
+
+test("the admin list searches with q", async () => {
+  const { fetch, calls } = mockFetch({ body: { contents: [], totalCount: 0, offset: 0, limit: 10 } });
+  await createAdminClient<KoyaModels>({ ...options, fetch }).contents.list("blog", { q: "macros", filters: "title[exists]" });
+  assert.deepEqual(Object.fromEntries(calls[0]!.url.searchParams), { q: "macros", filters: "title[exists]" });
+});
+
 test("media upload is multipart with one file part per file", async () => {
   const { fetch, calls } = mockFetch({ status: 201, body: { media: [{ id: "m1" }, { id: "m2" }] } });
   const admin = createAdminClient({ ...options, fetch });

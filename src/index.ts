@@ -10,6 +10,7 @@ export type {
   CreateOptions,
   DataInput,
   DeployOptions,
+  PublishOptions,
 } from "./admin.ts";
 export { defineConfig, defineSchema } from "./config.ts";
 export type { Config } from "./config.ts";

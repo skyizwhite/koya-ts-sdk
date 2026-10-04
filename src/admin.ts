@@ -6,8 +6,10 @@ import {
   deleteMedia,
   deploySchema,
   discardAdminContentDraft,
+  discardAdminObjectDraft,
   getAdminContent,
   getAdminContentDraftKey,
+  getAdminObjectDraftKey,
   getMe,
   getMedia,
   getSchema,
@@ -16,14 +18,17 @@ import {
   listMedia,
   planSchema,
   publishAdminContent,
+  publishAdminObject,
   unpublishAdminContent,
+  unpublishAdminObject,
   updateAdminContentDraft,
+  updateAdminObjectDraft,
   updateMedia,
   uploadMedia,
 } from "./generated/koya.ts";
 import type { AdminContent as RawAdminContent, ListAdminContentsParams, Schema } from "./generated/koya.ts";
 import type { Transport } from "./http.ts";
-import type { AnyModels, ModelMap } from "./models.ts";
+import type { AnyModels, ListModels, ModelMap, ObjectModels } from "./models.ts";
 
 export interface AdminClientOptions {
   baseUrl: string;
@@ -66,6 +71,14 @@ export interface AdminListQuery {
   offset?: number;
   orders?: string | readonly string[];
   filters?: string;
+  /** Search the text fields, as the delivery API's `q`; it applies to the draft when there is one. */
+  q?: string;
+}
+
+export interface PublishOptions<Data> {
+  /** Published instead of the draft. */
+  data?: DataInput<Data>;
+  publishedAt?: string;
 }
 
 export interface DeployOptions {
@@ -96,57 +109,78 @@ export function createAdminClient<M extends ModelMap = AnyModels>(options: Admin
         deploySchema(space, schema, force ? { force: "true" } : undefined, init),
     },
 
+    /** The contents of `list` models, each reached through its id. */
     contents: {
-      /** Every content of the model, drafts included; filters and orders apply to the draft when there is one. */
-      list<K extends keyof M & string>(model: K, query: AdminListQuery = {}): Promise<AdminContentList<Data<K>>> {
+      /** Every content of the model, drafts included; filters, orders and `q` apply to the draft when there is one. */
+      list<K extends ListModels<M>>(model: K, query: AdminListQuery = {}): Promise<AdminContentList<Data<K>>> {
         const params: ListAdminContentsParams = {};
         if (query.limit !== undefined) params.limit = query.limit;
         if (query.offset !== undefined) params.offset = query.offset;
         if (query.orders) params.orders = typeof query.orders === "string" ? query.orders : query.orders.join(",");
         if (query.filters) params.filters = query.filters;
+        if (query.q) params.q = query.q;
         return listAdminContents(space, model, params, init) as Promise<any>;
       },
-      get<K extends keyof M & string>(model: K, id: string): Content<K> {
+      get<K extends ListModels<M>>(model: K, id: string): Content<K> {
         return getAdminContent(space, model, id, init) as Promise<any>;
       },
-      /**
-       * Saved as a draft unless `publish`. Refused with `409 object_exists` on an `object` model that
-       * has its content already; change that one through its id.
-       */
-      create<K extends keyof M & string>(model: K, data: DataInput<Data<K>>, options: CreateOptions = {}): Content<K> {
+      /** Saved as a draft unless `publish`. */
+      create<K extends ListModels<M>>(model: K, data: DataInput<Data<K>>, options: CreateOptions = {}): Content<K> {
         return createAdminContent(space, model, { data, ...options }, init) as Promise<any>;
       },
       /** Merged onto the current draft (or the published data): keys given replace, `null` removes. */
-      updateDraft<K extends keyof M & string>(model: K, id: string, data: DataInput<Data<K>>): Content<K> {
+      updateDraft<K extends ListModels<M>>(model: K, id: string, data: DataInput<Data<K>>): Content<K> {
         return updateAdminContentDraft(space, model, id, { data }, init) as Promise<any>;
       },
       /** Publishes `data` when given, else the draft, else re-publishes. */
-      publish<K extends keyof M & string>(
-        model: K,
-        id: string,
-        options: { data?: DataInput<Data<K>>; publishedAt?: string } = {},
-      ): Content<K> {
+      publish<K extends ListModels<M>>(model: K, id: string, options: PublishOptions<Data<K>> = {}): Content<K> {
         return publishAdminContent(space, model, id, options, init) as Promise<any>;
       },
       /**
        * Takes it off the delivery API, keeping its data as a draft. Refused with `409 not_published`
        * when it is not published, and `409 in_use` while another content refers to it.
        */
-      unpublish<K extends keyof M & string>(model: K, id: string): Content<K> {
+      unpublish<K extends ListModels<M>>(model: K, id: string): Content<K> {
         return unpublishAdminContent(space, model, id, init) as Promise<any>;
       },
       /**
        * Drops the draft of a published content. Refused with `409 not_published` when it is not
        * published, and `409 no_draft` when it has no draft.
        */
-      discardDraft<K extends keyof M & string>(model: K, id: string): Content<K> {
+      discardDraft<K extends ListModels<M>>(model: K, id: string): Content<K> {
         return discardAdminContentDraft(space, model, id, init) as Promise<any>;
       },
       /** Refused with `409 in_use` while another content refers to it. */
-      delete: (model: keyof M & string, id: string) => deleteAdminContent(space, model, id, init),
+      delete: (model: ListModels<M>, id: string) => deleteAdminContent(space, model, id, init),
       /** The key that serves the draft through the delivery API, for preview URLs. */
-      draftKey: async (model: keyof M & string, id: string) =>
+      draftKey: async (model: ListModels<M>, id: string) =>
         (await getAdminContentDraftKey(space, model, id, init)).draftKey,
+    },
+
+    /** The one content of each `object` model, reached through the model. */
+    objects: {
+      /** Both versions, as stored. Refused with `404 not_found` until its first save or publish. */
+      get<K extends ObjectModels<M>>(model: K): Content<K> {
+        return listAdminContents(space, model, undefined, init) as Promise<any>;
+      },
+      /** Merged onto the current draft (or the published data); the first save makes the content. */
+      save<K extends ObjectModels<M>>(model: K, data: DataInput<Data<K>>): Content<K> {
+        return updateAdminObjectDraft(space, model, { data }, init) as Promise<any>;
+      },
+      /** Publishes `data` when given, else the draft, else re-publishes; `data` makes the content when it has none. */
+      publish<K extends ObjectModels<M>>(model: K, options: PublishOptions<Data<K>> = {}): Content<K> {
+        return publishAdminObject(space, model, options, init) as Promise<any>;
+      },
+      /** Takes it off the delivery API, keeping its data as a draft. Refused with `409 not_published` when it is not published. */
+      unpublish<K extends ObjectModels<M>>(model: K): Content<K> {
+        return unpublishAdminObject(space, model, init) as Promise<any>;
+      },
+      /** Drops its draft. Refused with `409 not_published` when it is not published, and `409 no_draft` when it has no draft. */
+      discardDraft<K extends ObjectModels<M>>(model: K): Content<K> {
+        return discardAdminObjectDraft(space, model, init) as Promise<any>;
+      },
+      /** The key that serves the draft through the delivery API, for preview URLs. */
+      draftKey: async (model: ObjectModels<M>) => (await getAdminObjectDraftKey(space, model, init)).draftKey,
     },
 
     deliveryKeys: {

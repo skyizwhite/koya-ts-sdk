@@ -13,6 +13,7 @@ test("getList sends the delivery key and joins list parameters", async () => {
     limit: 5,
     orders: ["-publishedAt", "title"],
     filters: "title[contains]lisp",
+    q: "macros",
     include: ["tags", "author.mentor"],
     fields: ["id", "title", "tags", "author"],
   });
@@ -24,6 +25,7 @@ test("getList sends the delivery key and joins list parameters", async () => {
     limit: "5",
     orders: "-publishedAt,title",
     filters: "title[contains]lisp",
+    q: "macros",
     include: "tags,author.mentor",
     fields: "id,title,tags,author",
   });

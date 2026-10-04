@@ -1,6 +1,6 @@
 // Type-level checks: `npm run typecheck` fails when one of these stops holding.
 import { test } from "node:test";
-import type { Client, Delivered, Media } from "../src/index.ts";
+import type { AdminClient, Client, Delivered, Media } from "../src/index.ts";
 import type { KoyaModels } from "./fixtures/koya.gen.ts";
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -36,6 +36,20 @@ async function calls() {
   client.getObject("blog");
 }
 void calls;
+
+declare const admin: AdminClient<M>;
+async function adminCalls() {
+  const settings = await admin.objects.get("site-settings");
+  expect<Equal<typeof settings.published, M["site-settings"]["data"] | null>>();
+  await admin.objects.save("site-settings", { maintenance: true });
+  // @ts-expect-error a list model's contents are reached through their ids
+  admin.objects.get("blog");
+  // @ts-expect-error an object model's content is reached through the model
+  admin.contents.get("site-settings", "id");
+  // @ts-expect-error nor made as one of many
+  admin.contents.create("site-settings", {});
+}
+void adminCalls;
 
 declare const untyped: Client;
 async function untypedCalls() {

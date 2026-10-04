@@ -530,9 +530,18 @@ export type OrdersParameter = string;
  * groups of `[and]` terms. Operators: `equals`, `not_equals`, `contains`,
  * `not_contains`, `begins_with`, `exists`, `not_exists`, `less_than`,
  * `greater_than`. On a `many` field, `equals` and `contains` mean "has
- * this value". Example: `title[contains]lisp[and]publishedAt[exists]`.
+ * this value". On a `richtext` field, `contains`, `not_contains` and
+ * `begins_with` read its text without tags. Example:
+ * `title[contains]lisp[and]publishedAt[exists]`.
  */
 export type FiltersParameter = string;
+
+/**
+ * Search: the text of the model's `text`, `textarea`, `slug` and `richtext`
+ * fields contains it (rich text without its tags), or it is a content's
+ * whole id. Applies together with `filters`.
+ */
+export type QParameter = string;
 
 /**
  * Comma-separated fields to keep in each content; applied after `include` and
@@ -543,14 +552,15 @@ export type FieldsParameter = string;
 /**
  * Comma-separated reference fields to embed, dotted for nesting:
  * `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
- * Only `reference` fields may be named. Referenced contents that are
- * missing or unpublished are dropped from a `many` field and `null` in a
+ * Only `reference` fields may be named. What is embedded is the referenced
+ * contents' published data, with a `draftKey` too. Referenced contents that
+ * are missing or unpublished are dropped from a `many` field and `null` in a
  * single one.
  */
 export type IncludeParameter = string;
 
 /**
- * The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data.
+ * The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data. The contents it embeds through `include` stay published.
  */
 export type DraftKeyParameter = string;
 
@@ -580,19 +590,28 @@ fields?: FieldsParameter;
  * groups of `[and]` terms. Operators: `equals`, `not_equals`, `contains`,
  * `not_contains`, `begins_with`, `exists`, `not_exists`, `less_than`,
  * `greater_than`. On a `many` field, `equals` and `contains` mean "has
- * this value". Example: `title[contains]lisp[and]publishedAt[exists]`.
+ * this value". On a `richtext` field, `contains`, `not_contains` and
+ * `begins_with` read its text without tags. Example:
+ * `title[contains]lisp[and]publishedAt[exists]`.
  */
 filters?: FiltersParameter;
 /**
+ * Search: the text of the model's `text`, `textarea`, `slug` and `richtext`
+ * fields contains it (rich text without its tags), or it is a content's
+ * whole id. Applies together with `filters`.
+ */
+q?: QParameter;
+/**
  * Comma-separated reference fields to embed, dotted for nesting:
  * `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
- * Only `reference` fields may be named. Referenced contents that are
- * missing or unpublished are dropped from a `many` field and `null` in a
+ * Only `reference` fields may be named. What is embedded is the referenced
+ * contents' published data, with a `draftKey` too. Referenced contents that
+ * are missing or unpublished are dropped from a `many` field and `null` in a
  * single one.
  */
 include?: IncludeParameter;
 /**
- * The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data.
+ * The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data. The contents it embeds through `include` stay published.
  */
 draftKey?: DraftKeyParameter;
 };
@@ -606,13 +625,14 @@ fields?: FieldsParameter;
 /**
  * Comma-separated reference fields to embed, dotted for nesting:
  * `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
- * Only `reference` fields may be named. Referenced contents that are
- * missing or unpublished are dropped from a `many` field and `null` in a
+ * Only `reference` fields may be named. What is embedded is the referenced
+ * contents' published data, with a `draftKey` too. Referenced contents that
+ * are missing or unpublished are dropped from a `many` field and `null` in a
  * single one.
  */
 include?: IncludeParameter;
 /**
- * The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data.
+ * The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data. The contents it embeds through `include` stay published.
  */
 draftKey?: DraftKeyParameter;
 };
@@ -656,9 +676,21 @@ orders?: OrdersParameter;
  * groups of `[and]` terms. Operators: `equals`, `not_equals`, `contains`,
  * `not_contains`, `begins_with`, `exists`, `not_exists`, `less_than`,
  * `greater_than`. On a `many` field, `equals` and `contains` mean "has
- * this value". Example: `title[contains]lisp[and]publishedAt[exists]`.
+ * this value". On a `richtext` field, `contains`, `not_contains` and
+ * `begins_with` read its text without tags. Example:
+ * `title[contains]lisp[and]publishedAt[exists]`.
  */
 filters?: FiltersParameter;
+/**
+ * Search: the text of the model's `text`, `textarea`, `slug` and `richtext`
+ * fields contains it (rich text without its tags), or it is a content's
+ * whole id. Applies together with `filters`.
+ */
+q?: QParameter;
+};
+
+export type GetAdminObjectDraftKey200 = {
+  draftKey: string;
 };
 
 export type GetAdminContentDraftKey200 = {
@@ -719,7 +751,7 @@ export const getGetContentsUrl = (space: string,
 /**
  * For a `list` model, a page of published contents. For an `object` model,
  * its single content (published, or its draft with the right `draftKey`);
- * `limit`, `offset`, `orders` and `filters` are ignored then.
+ * `limit`, `offset`, `orders`, `filters` and `q` are ignored then.
  * @summary List published contents, or read an object model's content
  */
 export const getContents = async (space: string,
@@ -957,15 +989,18 @@ export const getListAdminContentsUrl = (space: string,
 }
 
 /**
- * Takes the delivery API's `limit`, `offset`, `orders` and `filters`.
- * Filters and orders apply to the draft data when a content has one.
- * @summary List every content of a model, drafts included
+ * For a `list` model, a page of contents; takes the delivery API's `limit`,
+ * `offset`, `orders`, `filters` and `q`, and they apply to the
+ * draft data when a content has one. For an `object` model, its content,
+ * both versions, and those parameters are ignored; 404 until its first
+ * write.
+ * @summary List every content of a model, drafts included, or read an object model's content
  */
 export const listAdminContents = async (space: string,
     model: string,
-    params?: ListAdminContentsParams, options?: Parameters<typeof koyaFetch>[1]): Promise<AdminContentList> => {
+    params?: ListAdminContentsParams, options?: Parameters<typeof koyaFetch>[1]): Promise<AdminContentList | AdminContent> => {
 
-  return koyaFetch<AdminContentList>(getListAdminContentsUrl(space,model,params),
+  return koyaFetch<AdminContentList | AdminContent>(getListAdminContentsUrl(space,model,params),
   {
     ...options,
     method: 'GET'
@@ -993,7 +1028,7 @@ export const getCreateAdminContentUrl = (space: string,
  * UTC with milliseconds.
  * `publishedAt` and `revisedAt` are only stored when publishing. An
  * `object` model that already has its content refuses a second one; change
- * that one through its id.
+ * that one through the model.
  * @summary Create a content
  */
 export const createAdminContent = async (space: string,
@@ -1020,6 +1055,178 @@ return koyaFetch<AdminContent>(getCreateAdminContentUrl(space,model),
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(createContent)
+  }
+);}
+
+
+
+export const getUpdateAdminObjectDraftUrl = (space: string,
+    model: string,) => {
+
+
+
+
+  return `/admin/api/contents/${space}/${model}`
+}
+
+/**
+ * As saving a draft through an id, for the content of an `object` model.
+ * The first save makes that content, filling the defaults. 404 for a
+ * `list` model.
+ * @summary Save a draft of an object model's content
+ */
+export const updateAdminObjectDraft = async (space: string,
+    model: string,
+    updateDraft: UpdateDraft, options?: Parameters<typeof koyaFetch>[1]): Promise<AdminContent> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return koyaFetch<AdminContent>(getUpdateAdminObjectDraftUrl(space,model),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateDraft)
+  }
+);}
+
+
+
+export const getPublishAdminObjectUrl = (space: string,
+    model: string,) => {
+
+
+
+
+  return `/admin/api/contents/${space}/${model}/publish`
+}
+
+/**
+ * As publishing through an id, for the content of an `object` model.
+ * Before its first write, `data` makes the content, published; without
+ * `data` that is a 404. 404 for a `list` model.
+ * @summary Publish an object model's content
+ */
+export const publishAdminObject = async (space: string,
+    model: string,
+    publishContent?: PublishContent, options?: Parameters<typeof koyaFetch>[1]): Promise<AdminContent> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return koyaFetch<AdminContent>(getPublishAdminObjectUrl(space,model),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(publishContent)
+  }
+);}
+
+
+
+export const getUnpublishAdminObjectUrl = (space: string,
+    model: string,) => {
+
+
+
+
+  return `/admin/api/contents/${space}/${model}/unpublish`
+}
+
+/**
+ * As unpublishing through an id, for the content of an `object` model.
+ * 404 for a `list` model, or before its first write.
+ * @summary Unpublish an object model's content
+ */
+export const unpublishAdminObject = async (space: string,
+    model: string, options?: Parameters<typeof koyaFetch>[1]): Promise<AdminContent> => {
+
+  return koyaFetch<AdminContent>(getUnpublishAdminObjectUrl(space,model),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getDiscardAdminObjectDraftUrl = (space: string,
+    model: string,) => {
+
+
+
+
+  return `/admin/api/contents/${space}/${model}/discard-draft`
+}
+
+/**
+ * As discarding through an id, for the content of an `object` model.
+ * 404 for a `list` model, or before its first write.
+ * @summary Discard the draft of an object model's content
+ */
+export const discardAdminObjectDraft = async (space: string,
+    model: string, options?: Parameters<typeof koyaFetch>[1]): Promise<AdminContent> => {
+
+  return koyaFetch<AdminContent>(getDiscardAdminObjectDraftUrl(space,model),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export const getGetAdminObjectDraftKeyUrl = (space: string,
+    model: string,) => {
+
+
+
+
+  return `/admin/api/contents/${space}/${model}/draft-key`
+}
+
+/**
+ * As the draft key through an id, for the content of an `object` model.
+ * 404 for a `list` model, or before its first write.
+ * @summary The draft key of an object model's content
+ */
+export const getAdminObjectDraftKey = async (space: string,
+    model: string, options?: Parameters<typeof koyaFetch>[1]): Promise<GetAdminObjectDraftKey200> => {
+
+  return koyaFetch<GetAdminObjectDraftKey200>(getGetAdminObjectDraftKeyUrl(space,model),
+  {
+    ...options,
+    method: 'POST'
+
+
   }
 );}
 
@@ -1408,7 +1615,8 @@ export const getUploadMediaUrl = (space: string,) => {
  * `multipart/form-data` with one or more `file` parts and an optional `alt`
  * applied to all of them. PNG, JPEG, GIF and WebP, up to 20 MB each and 20 MB
  * together, decided by the file's leading bytes; the part's Content-Type is
- * ignored. The whole request body is limited to 21 MB.
+ * ignored. The whole request body is limited to 21 MB. A JPEG, PNG or WebP
+ * is stored without its metadata but its orientation and colour profile.
  * @summary Upload images
  */
 export const uploadMedia = async (space: string,

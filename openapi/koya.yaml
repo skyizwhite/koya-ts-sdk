@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: koya
-  version: 0.17.0
+  version: 0.18.0
   summary: Delivery and admin APIs of a koya server
   description: |
     Two JSON APIs on one server.
@@ -63,7 +63,7 @@ paths:
       description: |
         For a `list` model, a page of published contents. For an `object` model,
         its single content (published, or its draft with the right `draftKey`);
-        `limit`, `offset`, `orders` and `filters` are ignored then.
+        `limit`, `offset`, `orders`, `filters` and `q` are ignored then.
       security: [{ deliveryKey: [] }]
       parameters:
         - $ref: "#/components/parameters/space"
@@ -73,6 +73,7 @@ paths:
         - $ref: "#/components/parameters/orders"
         - $ref: "#/components/parameters/fields"
         - $ref: "#/components/parameters/filters"
+        - $ref: "#/components/parameters/q"
         - $ref: "#/components/parameters/include"
         - $ref: "#/components/parameters/draftKey"
       responses:
@@ -239,22 +240,29 @@ paths:
     get:
       operationId: listAdminContents
       tags: [contents]
-      summary: List every content of a model, drafts included
+      summary: List every content of a model, drafts included, or read an object model's content
       description: |
-        Takes the delivery API's `limit`, `offset`, `orders` and `filters`.
-        Filters and orders apply to the draft data when a content has one.
+        For a `list` model, a page of contents; takes the delivery API's `limit`,
+        `offset`, `orders`, `filters` and `q`, and they apply to the
+        draft data when a content has one. For an `object` model, its content,
+        both versions, and those parameters are ignored; 404 until its first
+        write.
       security: [{ managementKey: [] }]
       parameters:
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/orders"
         - $ref: "#/components/parameters/filters"
+        - $ref: "#/components/parameters/q"
       responses:
         "200":
-          description: A page of contents
+          description: A page of contents, or the object model's content
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AdminContentList" }
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AdminContentList"
+                  - $ref: "#/components/schemas/AdminContent"
         "400": { $ref: "#/components/responses/BadQuery" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -270,7 +278,7 @@ paths:
         UTC with milliseconds.
         `publishedAt` and `revisedAt` are only stored when publishing. An
         `object` model that already has its content refuses a second one; change
-        that one through its id.
+        that one through the model.
       security: [{ managementKey: [] }]
       requestBody:
         required: true
@@ -293,8 +301,144 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+    patch:
+      operationId: updateAdminObjectDraft
+      tags: [contents]
+      summary: Save a draft of an object model's content
+      description: |
+        As saving a draft through an id, for the content of an `object` model.
+        The first save makes that content, filling the defaults. 404 for a
+        `list` model.
+      security: [{ managementKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDraft" }
+      responses:
+        "200":
+          description: The content with its new draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /admin/api/contents/{space}/{model}/publish:
+    post:
+      operationId: publishAdminObject
+      tags: [contents]
+      summary: Publish an object model's content
+      description: |
+        As publishing through an id, for the content of an `object` model.
+        Before its first write, `data` makes the content, published; without
+        `data` that is a 404. 404 for a `list` model.
+      security: [{ managementKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublishContent" }
+      responses:
+        "200":
+          description: The published content
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /admin/api/contents/{space}/{model}/unpublish:
+    post:
+      operationId: unpublishAdminObject
+      tags: [contents]
+      summary: Unpublish an object model's content
+      description: |
+        As unpublishing through an id, for the content of an `object` model.
+        404 for a `list` model, or before its first write.
+      security: [{ managementKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+      responses:
+        "200":
+          description: The content, now a draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "409":
+          description: "`not_published`: the content is not published. `in_use`: other contents refer to it through a reference field of the current schema; the message names how many"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /admin/api/contents/{space}/{model}/discard-draft:
+    post:
+      operationId: discardAdminObjectDraft
+      tags: [contents]
+      summary: Discard the draft of an object model's content
+      description: |
+        As discarding through an id, for the content of an `object` model.
+        404 for a `list` model, or before its first write.
+      security: [{ managementKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+      responses:
+        "200":
+          description: The content, published only
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_published`: the content has no published version to fall back to. `no_draft`: it is published with no draft to discard"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+
+  /admin/api/contents/{space}/{model}/draft-key:
+    post:
+      operationId: getAdminObjectDraftKey
+      tags: [contents]
+      summary: The draft key of an object model's content
+      description: |
+        As the draft key through an id, for the content of an `object` model.
+        404 for a `list` model, or before its first write.
+      security: [{ managementKey: [] }]
+      parameters:
+        - $ref: "#/components/parameters/space"
+        - $ref: "#/components/parameters/model"
+      responses:
+        "200":
+          description: The key
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [draftKey]
+                properties:
+                  draftKey: { type: string, examples: ["3f1c…"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /admin/api/contents/{space}/{model}/{id}:
+    description: A content of a `list` model; every route under it answers 404 for an `object` model.
     parameters:
       - $ref: "#/components/parameters/space"
       - $ref: "#/components/parameters/model"
@@ -571,7 +715,8 @@ paths:
         `multipart/form-data` with one or more `file` parts and an optional `alt`
         applied to all of them. PNG, JPEG, GIF and WebP, up to 20 MB each and 20 MB
         together, decided by the file's leading bytes; the part's Content-Type is
-        ignored. The whole request body is limited to 21 MB.
+        ignored. The whole request body is limited to 21 MB. A JPEG, PNG or WebP
+        is stored without its metadata but its orientation and colour profile.
       security: [{ managementKey: [] }]
       requestBody:
         required: true
@@ -725,7 +870,17 @@ components:
         groups of `[and]` terms. Operators: `equals`, `not_equals`, `contains`,
         `not_contains`, `begins_with`, `exists`, `not_exists`, `less_than`,
         `greater_than`. On a `many` field, `equals` and `contains` mean "has
-        this value". Example: `title[contains]lisp[and]publishedAt[exists]`.
+        this value". On a `richtext` field, `contains`, `not_contains` and
+        `begins_with` read its text without tags. Example:
+        `title[contains]lisp[and]publishedAt[exists]`.
+    q:
+      name: q
+      in: query
+      schema: { type: string }
+      description: |
+        Search: the text of the model's `text`, `textarea`, `slug` and `richtext`
+        fields contains it (rich text without its tags), or it is a content's
+        whole id. Applies together with `filters`.
     fields:
       name: fields
       in: query
@@ -740,14 +895,15 @@ components:
       description: |
         Comma-separated reference fields to embed, dotted for nesting:
         `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
-        Only `reference` fields may be named. Referenced contents that are
-        missing or unpublished are dropped from a `many` field and `null` in a
+        Only `reference` fields may be named. What is embedded is the referenced
+        contents' published data, with a `draftKey` too. Referenced contents that
+        are missing or unpublished are dropped from a `many` field and `null` in a
         single one.
     draftKey:
       name: draftKey
       in: query
       schema: { type: string }
-      description: The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data.
+      description: The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data. The contents it embeds through `include` stay published.
 
   responses:
     BadRequest:
@@ -843,7 +999,7 @@ components:
       required: [space, version]
       properties:
         space: { type: string, description: "the space the management key is limited to" }
-        version: { type: string, examples: ["0.17.0"] }
+        version: { type: string, examples: ["0.18.0"] }
 
     Schema:
       type: object
@@ -1246,7 +1402,7 @@ components:
         url: { type: string, description: "Absolute: KOYA_BASE_URL + /media/{space}/{id}.{ext}" }
         filename: { type: string, description: The uploaded file's base name }
         mime: { type: string, enum: [image/png, image/jpeg, image/gif, image/webp] }
-        size: { type: integer, description: Bytes }
+        size: { type: integer, description: Bytes, as stored }
         width:
           oneOf: [{ type: integer }, { type: "null" }]
         height:
