@@ -113,7 +113,7 @@ export default defineConfig({
         label: "title",
         fields: [
           { name: "title", type: "text", required: true },
-          { name: "slug", type: "slug", from: "title", unique: true },
+          { name: "slug", type: "slug", required: true },
           { name: "cover", type: "media" },
           { name: "author", type: "reference", model: "author" },
           { name: "tags", type: "reference", model: "tag", many: true },
