@@ -11,7 +11,7 @@ self-hosted headless CMS:
 ESM, nothing at runtime but `fetch`: Node 22.18+, Deno, Bun, edge runtimes.
 
 ```sh
-npm install github:skyizwhite/koya-ts-sdk#v0.5.0
+npm install github:skyizwhite/koya-ts-sdk#v0.6.0
 ```
 
 It is not on the npm registry yet. npm builds `dist/` on install, so the first
