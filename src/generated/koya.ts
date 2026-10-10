@@ -292,15 +292,16 @@ export const SlugFieldType = {
   slug: 'slug',
 } as const;
 
+/**
+ * A second key of a list content, typed by the editor and unique within
+ * the model. A list model has one at most, an object model none.
+ */
 export interface SlugField {
   name: FieldName;
   type: SlugFieldType;
   was?: FieldName;
   help?: FieldHelp;
   required?: boolean;
-  /** A text or textarea field of the same model, filled into a blank slug */
-  from: string;
-  unique?: boolean;
   pattern?: string;
 }
 
@@ -363,12 +364,12 @@ export interface Model {
   name: string;
   kind: ModelKind;
   /**
-     * Template for the editor's preview link, starting with `http://` or `https://`; `{CONTENT_ID}` and `{DRAFT_KEY}` are substituted.
+     * Template for the editor's preview link, starting with `http://` or `https://`; `{CONTENT_ID}`, `{CONTENT_SLUG}` (the draft's) and `{DRAFT_KEY}` are substituted. A template with `{CONTENT_SLUG}` needs a slug field, and no link is shown while the slug is blank.
      * @pattern ^[Hh][Tt][Tt][Pp][Ss]?://.
      */
   previewUrl?: string;
   /**
-     * Template for the editor's published page link, starting with `http://` or `https://`; `{CONTENT_ID}` is substituted.
+     * Template for the editor's published page link, starting with `http://` or `https://`; `{CONTENT_ID}` and `{CONTENT_SLUG}` (the published one) are substituted. A template with `{CONTENT_SLUG}` needs a slug field, and no link is shown while the slug is blank.
      * @pattern ^[Hh][Tt][Tt][Pp][Ss]?://.
      */
   publicUrl?: string;
@@ -440,11 +441,6 @@ export interface CreateContent {
      * @nullable
      */
   publish?: boolean | null;
-  /**
-     * Defaults to a fresh ULID. `new` is refused, as the admin UI's new-content form.
-     * @pattern ^[A-Za-z0-9_-]{1,64}$
-     */
-  id?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   publishedAt?: Timestamp;
@@ -470,6 +466,7 @@ export interface PublishContent {
  * fields are present; the system fields always are.
  */
 export interface Content {
+  /** 12 lowercase letters and digits, made by the server; a content stored before keeps the id it had */
   id: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -498,6 +495,7 @@ export const AdminContentStatus = {
  * Admin shape: status, both data versions as stored (ids, not expanded) and metadata.
  */
 export interface AdminContent {
+  /** 12 lowercase letters and digits, made by the server; a content stored before keeps the id it had */
   id: string;
   status: AdminContentStatus;
   published: ContentData | null;
@@ -625,7 +623,9 @@ export type OffsetParameter = number;
 
 /**
  * Comma-separated field or system field names, `-` prefix for descending,
- * e.g. `-publishedAt,title`. Default: newest published first.
+ * e.g. `-publishedAt,title`. Default: newest published first. `id`
+ * orders by the ids' text, not by when the contents were made;
+ * `createdAt` by its value, which creating the content may have given.
  */
 export type OrdersParameter = string;
 
@@ -699,7 +699,9 @@ limit?: LimitParameter;
 offset?: OffsetParameter;
 /**
  * Comma-separated field or system field names, `-` prefix for descending,
- * e.g. `-publishedAt,title`. Default: newest published first.
+ * e.g. `-publishedAt,title`. Default: newest published first. `id`
+ * orders by the ids' text, not by when the contents were made;
+ * `createdAt` by its value, which creating the content may have given.
  */
 orders?: OrdersParameter;
 /**
@@ -753,6 +755,35 @@ include?: IncludeParameter;
 };
 
 export type GetListContentParams = {
+/**
+ * Comma-separated top-level fields to keep in each content; applied after
+ * `include` and media expansion. A custom field or a repeater is kept
+ * whole. The system
+ * fields are always kept.
+ */
+fields?: FieldsParameter;
+/**
+ * Comma-separated reference fields to embed, dotted for nesting:
+ * `tags,author.team` embeds `tags`, `author`, and `team` inside each `author`.
+ * Only `reference` fields may be named; one inside a custom field is named
+ * through it, as `meta.author`, and a path ending at a custom field or at
+ * anything else inside it is `bad_query`. One in a repeater's rows is named
+ * through the repeater, as `blocks.by`, and embedded in each row whose
+ * custom field has a reference named `by`, the other rows left as they
+ * are; a path that reaches no reference is `bad_query`. What is embedded is the referenced
+ * contents' published data, even when the request carries a `draftKey`;
+ * an embedded content carries no draft key. Referenced contents that
+ * are missing or unpublished are dropped from a `many` field and `null` in a
+ * single one.
+ */
+include?: IncludeParameter;
+/**
+ * The content's draft key (from the admin API or the editor's preview link) serves its draft instead of the published data. The contents it embeds through `include` stay published.
+ */
+draftKey?: DraftKeyParameter;
+};
+
+export type GetListContentBySlugParams = {
 /**
  * Comma-separated top-level fields to keep in each content; applied after
  * `include` and media expansion. A custom field or a repeater is kept
@@ -841,7 +872,9 @@ limit?: LimitParameter;
 offset?: OffsetParameter;
 /**
  * Comma-separated field or system field names, `-` prefix for descending,
- * e.g. `-publishedAt,title`. Default: newest published first.
+ * e.g. `-publishedAt,title`. Default: newest published first. `id`
+ * orders by the ids' text, not by when the contents were made;
+ * `createdAt` by its value, which creating the content may have given.
  */
 orders?: OrdersParameter;
 /**
@@ -978,6 +1011,48 @@ export const getListContent = async (space: string,
     params?: GetListContentParams, options?: Parameters<typeof koyaFetch>[1]): Promise<Content> => {
 
   return koyaFetch<Content>(getGetListContentUrl(space,model,id,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getGetListContentBySlugUrl = (space: string,
+    model: string,
+    slug: string,
+    params?: GetListContentBySlugParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/${space}/lists/${model}/slugs/${slug}?${stringifiedParams}` : `/api/v1/${space}/lists/${model}/slugs/${slug}`
+}
+
+/**
+ * The content whose published slug it is, as `getListContent` reads it.
+ * With the content's `draftKey`, its draft's slug finds it too, and its
+ * draft is read; a key that is not the content's finds it by its published
+ * slug only. 404 for an `object` model, a model without exactly one slug
+ * field, or a slug two contents hold.
+ * @summary Read one published list content by its slug
+ */
+export const getListContentBySlug = async (space: string,
+    model: string,
+    slug: string,
+    params?: GetListContentBySlugParams, options?: Parameters<typeof koyaFetch>[1]): Promise<Content> => {
+
+  return koyaFetch<Content>(getGetListContentBySlugUrl(space,model,slug,params),
   {
     ...options,
     method: 'GET'
@@ -1239,9 +1314,10 @@ export const getCreateAdminListContentUrl = (space: string,
 }
 
 /**
- * Saved as a draft unless `publish` is true. `id` and the system timestamps
- * may be supplied, for imports that keep another system's ids and dates; an
- * id need only be unique within the space;
+ * Saved as a draft unless `publish` is true. The server makes the id: 12
+ * lowercase letters and digits drawn at random, one the space does not
+ * hold, and a body that gives `id` is a 400 (`null` is as absent). The system timestamps may be
+ * supplied, for imports that keep another system's dates;
  * a timestamp needs a date, a time and an offset or `Z`, and is stored in
  * UTC with milliseconds.
  * `publishedAt` and `revisedAt` are only stored when publishing. 404 for an
@@ -1386,6 +1462,107 @@ export const deleteAdminListContent = async (space: string,
 
 
 
+export const getGetAdminListContentBySlugUrl = (space: string,
+    model: string,
+    slug: string,) => {
+
+
+
+
+  return `/admin/api/${space}/lists/${model}/slugs/${slug}`
+}
+
+/**
+ * @summary Read a list content by its slug, both versions
+ */
+export const getAdminListContentBySlug = async (space: string,
+    model: string,
+    slug: string, options?: Parameters<typeof koyaFetch>[1]): Promise<AdminContent> => {
+
+  return koyaFetch<AdminContent>(getGetAdminListContentBySlugUrl(space,model,slug),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export const getUpdateAdminListContentBySlugUrl = (space: string,
+    model: string,
+    slug: string,) => {
+
+
+
+
+  return `/admin/api/${space}/lists/${model}/slugs/${slug}`
+}
+
+/**
+ * As `updateAdminListContent`.
+ * @summary Save a draft of a list content found by its slug
+ */
+export const updateAdminListContentBySlug = async (space: string,
+    model: string,
+    slug: string,
+    updateDraft: UpdateDraft, options?: Parameters<typeof koyaFetch>[1]): Promise<AdminContent> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return koyaFetch<AdminContent>(getUpdateAdminListContentBySlugUrl(space,model,slug),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateDraft)
+  }
+);}
+
+
+
+export const getDeleteAdminListContentBySlugUrl = (space: string,
+    model: string,
+    slug: string,) => {
+
+
+
+
+  return `/admin/api/${space}/lists/${model}/slugs/${slug}`
+}
+
+/**
+ * As `deleteAdminListContent`.
+ * @summary Delete a list content found by its slug
+ */
+export const deleteAdminListContentBySlug = async (space: string,
+    model: string,
+    slug: string, options?: Parameters<typeof koyaFetch>[1]): Promise<DeletedResponse> => {
+
+  return koyaFetch<DeletedResponse>(getDeleteAdminListContentBySlugUrl(space,model,slug),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
 export const getPublishAdminListContentUrl = (space: string,
     model: string,
     id: string,) => {
@@ -1445,7 +1622,8 @@ export const getUnpublishAdminListContentUrl = (space: string,
 
 /**
  * Takes the content off the delivery API. Its data (the draft when there is
- * one) is kept as a draft with a new draft key; `publishedAt` is cleared.
+ * one) is kept as a draft with a new draft key; `publishedAt` and `revisedAt`
+ * are cleared.
  * Fires `unpublish` webhooks. A content that is not published is refused
  * with 409 `not_published`, and a published one with 409 `in_use` while
  * another content refers to it.

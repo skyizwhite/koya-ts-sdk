@@ -52,6 +52,10 @@ async function calls() {
   client.getList("blog", { include: ["blocks"] });
   // @ts-expect-error a list model is not an object
   client.getObject("blog");
+  const bySlug = await client.getListContentBySlug("blog", "hello-world", { fields: ["title"] });
+  expect<Equal<keyof typeof bySlug, "id" | "createdAt" | "updatedAt" | "publishedAt" | "revisedAt" | "title">>();
+  // @ts-expect-error an object model has no slug to reach it by
+  client.getListContentBySlug("site-settings", "x");
 }
 void calls;
 
@@ -66,6 +70,10 @@ async function adminCalls() {
   admin.getListContent("site-settings", "id");
   // @ts-expect-error nor made as one of many
   admin.createListContent("site-settings", {});
+  // @ts-expect-error nor reached by a slug
+  admin.getListContentBySlug("site-settings", "x");
+  // @ts-expect-error the server makes a content's id
+  admin.createListContent("blog", { title: "x" }, { id: "x" });
 }
 void adminCalls;
 

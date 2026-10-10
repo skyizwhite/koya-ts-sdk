@@ -42,6 +42,15 @@ test("getListContent and getObject address the content and pass the draft key", 
   assert.equal(calls[1]?.url.search, "");
 });
 
+test("getListContentBySlug reaches a list content at its slug and passes the draft key", async () => {
+  const { fetch, calls } = mockFetch({ body: { id: "a" } });
+  const client = createClient<KoyaModels>({ ...options, fetch });
+  await client.getListContentBySlug("blog", "hello-world", { draftKey: "dk", fields: ["title"] });
+  assert.equal(calls[0]?.url.pathname, "/api/v1/website/lists/blog/slugs/hello-world");
+  assert.equal(calls[0]?.url.searchParams.get("draftKey"), "dk");
+  assert.equal(calls[0]?.url.searchParams.get("fields"), "title");
+});
+
 test("an error answer becomes a KoyaError with the server's code", async () => {
   const { fetch } = mockFetch({ status: 400, body: { error: { code: "bad_query", message: "unknown field \"x\"" } } });
   const client = createClient({ ...options, fetch });

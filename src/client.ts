@@ -1,4 +1,4 @@
-import { getList, getListContent, getObject } from "./generated/koya.ts";
+import { getList, getListContent, getListContentBySlug, getObject } from "./generated/koya.ts";
 import type { GetListParams } from "./generated/koya.ts";
 import type { Transport } from "./http.ts";
 import type {
@@ -96,6 +96,15 @@ export function createClient<M extends ModelMap = AnyModels>(options: ClientOpti
       query?: ContentQuery<M, K, I, F>,
     ): Promise<Result<M, K, I, F>> {
       return getListContent(space, model, id, params(query), { transport }) as Promise<any>;
+    },
+
+    /** One published content of a `list` model, found by its slug; with its `draftKey`, by its draft's slug, and its draft is read. */
+    getListContentBySlug<K extends ListModels<M>, const I extends IncludePath<M, K> = never, const F extends FieldName<M, K> = never>(
+      model: K,
+      slug: string,
+      query?: ContentQuery<M, K, I, F>,
+    ): Promise<Result<M, K, I, F>> {
+      return getListContentBySlug(space, model, slug, params(query), { transport }) as Promise<any>;
     },
 
     /** The content of an `object` model, or its draft with `draftKey`. */

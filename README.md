@@ -3,8 +3,8 @@
 A TypeScript client for [koya](https://github.com/skyizwhite/koya), a
 self-hosted headless CMS:
 
-- **Delivery API** — `getList` / `getListContent` / `getObject`, typed by model,
-  `include` and `fields` included.
+- **Delivery API** — `getList` / `getListContent` / `getListContentBySlug` /
+  `getObject`, typed by model, `include` and `fields` included.
 - **Admin API** — schema, contents, delivery keys and media, with a management key.
 - **A `koya` CLI** — `plan`, `deploy`, `pull` and `types`, to run from npm scripts.
 
@@ -40,6 +40,8 @@ contents[0]?.tags; // the tag contents; ids when not included
 const found = await koya.getList("blog", { q: "macros" }); // the text fields, rich text as its text, or a whole id
 
 const post = await koya.getListContent("blog", id, { draftKey }); // a draft, for previews
+const bySlug = await koya.getListContentBySlug("blog", "hello-world"); // its model's slug field
+const draft = await koya.getListContentBySlug("blog", slug, { draftKey }); // by its draft's slug
 const about = await koya.getObject("about");
 ```
 
@@ -87,7 +89,7 @@ await admin.publishObject("about");
 |---|---|
 | the key | `getMe()`: its space and the server version |
 | the schema | `getSchema()`, `planSchema(schema)`, `deploySchema(schema, { force })` |
-| a `list` model's contents, through their ids | `getList` (with `q`), `getListContent`, `createListContent`, `updateListContent`, `publishListContent`, `unpublishListContent`, `discardListContentDraft`, `deleteListContent`, `getListContentDraftKey` |
+| a `list` model's contents, through their ids | `getList` (with `q`), `getListContent`, `getListContentBySlug`, `createListContent`, `updateListContent`, `publishListContent`, `unpublishListContent`, `discardListContentDraft`, `deleteListContent`, `getListContentDraftKey` |
 | an `object` model's content, through the model | `getObject`, `updateObject` (the first update makes it), `publishObject`, `unpublishObject`, `discardObjectDraft`, `getObjectDraftKey` |
 | delivery keys | `listDeliveryKeys` (with the webhook secret), `createDeliveryKey(label)`, `deleteDeliveryKey(id)` |
 | media | `listMedia`, `getMedia`, `uploadMedia`, `updateMedia(id, { alt })`, `deleteMedia` |

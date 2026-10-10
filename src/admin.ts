@@ -9,6 +9,7 @@ import {
   discardAdminObjectDraft,
   getAdminList,
   getAdminListContent,
+  getAdminListContentBySlug,
   getAdminListContentDraftKey,
   getAdminObject,
   getAdminObjectDraftKey,
@@ -58,8 +59,6 @@ export type DataInput<Data> = { [F in keyof Data]?: Data[F] | null };
 export interface CreateOptions {
   /** Publish at once instead of saving a draft. */
   publish?: boolean;
-  /** Keep another system's id, for imports. Defaults to a fresh ULID. */
-  id?: string;
   createdAt?: string;
   updatedAt?: string;
   /** Stored only when publishing. */
@@ -121,6 +120,10 @@ export function createAdminClient<M extends ModelMap = AnyModels>(options: Admin
     /** One content of a `list` model, reached through its id: both versions, as stored. */
     getListContent<K extends ListModels<M>>(model: K, id: string): Content<K> {
       return getAdminListContent(space, model, id, init) as Promise<any>;
+    },
+    /** One content of a `list` model, found by its published slug or its draft's: both versions, as stored. */
+    getListContentBySlug<K extends ListModels<M>>(model: K, slug: string): Content<K> {
+      return getAdminListContentBySlug(space, model, slug, init) as Promise<any>;
     },
     /** Saved as a draft unless `publish`. */
     createListContent<K extends ListModels<M>>(model: K, data: DataInput<Data<K>>, options: CreateOptions = {}): Content<K> {

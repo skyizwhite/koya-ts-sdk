@@ -32,16 +32,24 @@ test("deploy sends the schema, with force=true only when asked", async () => {
 test("content writes send what the admin API takes", async () => {
   const { fetch, calls } = mockFetch({ status: 201, body: {} }, { body: {} }, { body: {} }, { body: { draftKey: "dk" } });
   const admin = createAdminClient<KoyaModels>({ ...options, fetch });
-  await admin.createListContent("blog", { title: "Hello", tags: ["t1"] }, { publish: true, id: "hello" });
+  await admin.createListContent("blog", { title: "Hello", tags: ["t1"] }, { publish: true });
   await admin.updateListContent("blog", "hello", { slug: null });
   await admin.publishListContent("blog", "hello", { publishedAt: "2026-09-20T00:00:00.000Z" });
   assert.equal(await admin.getListContentDraftKey("blog", "hello"), "dk");
   assert.equal(calls[0]?.url.pathname, "/admin/api/website/lists/blog");
-  assert.deepEqual(JSON.parse(String(calls[0]?.body)), { data: { title: "Hello", tags: ["t1"] }, publish: true, id: "hello" });
+  assert.deepEqual(JSON.parse(String(calls[0]?.body)), { data: { title: "Hello", tags: ["t1"] }, publish: true });
   assert.equal(calls[1]?.method, "PATCH");
   assert.deepEqual(JSON.parse(String(calls[1]?.body)), { data: { slug: null } });
   assert.equal(calls[2]?.url.pathname, "/admin/api/website/lists/blog/hello/publish");
   assert.equal(calls[3]?.url.pathname, "/admin/api/website/lists/blog/hello/draft-key");
+});
+
+test("a list content is read at its slug as at its id", async () => {
+  const { fetch, calls } = mockFetch({ body: { id: "a" } });
+  const admin = createAdminClient<KoyaModels>({ ...options, fetch });
+  await admin.getListContentBySlug("blog", "hello-world");
+  assert.equal(calls[0]?.method, "GET");
+  assert.equal(calls[0]?.url.pathname, "/admin/api/website/lists/blog/slugs/hello-world");
 });
 
 test("an object model's content is reached through its model, without an id", async () => {
