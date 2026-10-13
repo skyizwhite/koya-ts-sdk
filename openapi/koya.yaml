@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: koya
-  version: 0.20.0
+  version: 0.21.0
   summary: Delivery and admin APIs of a koya server
   description: |
     Two JSON APIs on one server.
@@ -226,10 +226,13 @@ paths:
         Validates the document, diffs it against the space's stored schema and,
         unless a destructive change is present without `force=true`, stores it.
         Existing content changes only as the schema does: a rename carries it
-        through, and a removed or retyped field's values are taken out of every
-        published object, draft and revision. The space must already exist — it is
-        made in the admin UI — and a deploy to another name, one that does not
-        exist included, is a 403.
+        through, a removed or retyped field's values are taken out of every
+        published object, draft and revision (inside a custom field or a
+        repeater's rows too), a custom field dropped from a repeater's
+        `customFields` takes its rows out of every revision, and a model removed,
+        or whose `kind` changes, loses its contents and their history. The
+        space must already exist — it is made in the admin UI — and a deploy to
+        another name, one that does not exist included, is a 403.
       security: [{ managementKey: [] }]
       parameters:
         - name: force
@@ -377,7 +380,8 @@ paths:
       description: |
         `data` is merged onto the current draft (or, without one, the published
         data): keys present replace, a `null` value removes the key, keys absent
-        stay. The result is validated whole. A new draft key is issued, so earlier
+        stay. A key that is no field of the model is refused (`unknown_field`),
+        `null` or not. The result is validated whole. A new draft key is issued, so earlier
         preview links stop working. When the result is what the content holds
         already, nothing is written -- no draft, no revision, no webhook -- and
         the content comes back as it is; when it is the published data again,
@@ -1183,7 +1187,7 @@ components:
       required: [space, version]
       properties:
         space: { type: string, description: "the space the management key is limited to" }
-        version: { type: string, examples: ["0.20.0"] }
+        version: { type: string, examples: ["0.21.0"] }
 
     Schema:
       type: object
@@ -1359,7 +1363,7 @@ components:
         was: { $ref: "#/components/schemas/FieldName" }
         help: { $ref: "#/components/schemas/FieldHelp" }
         required: { type: boolean }
-        default: { type: boolean, description: "`true` sets the field on a new content whose data does not mention it" }
+        default: { type: boolean, description: "`true` sets the field on a new content whose data leaves it out; a `false` or `null` given for the field gets no default" }
 
     DateField:
       type: object
@@ -1571,7 +1575,8 @@ components:
         `media` and `reference` fields; arrays on `many` fields; an object of
         its fields' values on a `custom` field; an array of rows on a
         `repeater`, each an object naming its custom field in `fieldId` beside
-        that custom field's fields' values.
+        that custom field's fields' values. A `null` is no value and is not
+        kept; a field without a value is absent.
       additionalProperties: true
 
     Content:
@@ -1598,8 +1603,8 @@ components:
         title: Hello
         slug: hello
         cover:
-          id: 01J8Q0Z5X2W3V4U5T6S7R8Q9P1
-          url: https://cms.example.com/media/website/01J8Q0Z5X2W3V4U5T6S7R8Q9P1.png
+          id: m7c4v1rb8e2s
+          url: https://cms.example.com/media/website/m7c4v1rb8e2s.png
           filename: cover.png
           mime: image/png
           size: 12345
@@ -1667,7 +1672,7 @@ components:
       type: object
       required: [id, url, filename, mime, size, width, height, alt, createdAt]
       properties:
-        id: { type: string, description: ULID }
+        id: { type: string, description: "12 lowercase letters and digits; a ULID for a media from before" }
         url: { type: string, description: "Absolute: KOYA_BASE_URL + /media/{space}/{id}.{ext}" }
         filename: { type: string, description: The uploaded file's base name }
         mime: { type: string, enum: [image/png, image/jpeg, image/gif, image/webp] }

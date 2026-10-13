@@ -195,7 +195,7 @@ export interface BooleanField {
   was?: FieldName;
   help?: FieldHelp;
   required?: boolean;
-  /** `true` sets the field on a new content whose data does not mention it */
+  /** `true` sets the field on a new content whose data leaves it out; a `false` or `null` given for the field gets no default */
   default?: boolean;
 }
 
@@ -430,7 +430,8 @@ export interface DeployResult {
  * `media` and `reference` fields; arrays on `many` fields; an object of
  * its fields' values on a `custom` field; an array of rows on a
  * `repeater`, each an object naming its custom field in `fieldId` beside
- * that custom field's fields' values.
+ * that custom field's fields' values. A `null` is no value and is not
+ * kept; a field without a value is absent.
  */
 export interface ContentData { [key: string]: unknown }
 
@@ -531,7 +532,7 @@ export const MediaMime = {
 } as const;
 
 export interface Media {
-  /** ULID */
+  /** 12 lowercase letters and digits; a ULID for a media from before */
   id: string;
   /** Absolute: KOYA_BASE_URL + /media/{space}/{id}.{ext} */
   url: string;
@@ -1192,10 +1193,13 @@ export const getDeploySchemaUrl = (space: string,
  * Validates the document, diffs it against the space's stored schema and,
  * unless a destructive change is present without `force=true`, stores it.
  * Existing content changes only as the schema does: a rename carries it
- * through, and a removed or retyped field's values are taken out of every
- * published object, draft and revision. The space must already exist — it is
- * made in the admin UI — and a deploy to another name, one that does not
- * exist included, is a 403.
+ * through, a removed or retyped field's values are taken out of every
+ * published object, draft and revision (inside a custom field or a
+ * repeater's rows too), a custom field dropped from a repeater's
+ * `customFields` takes its rows out of every revision, and a model removed,
+ * or whose `kind` changes, loses its contents and their history. The
+ * space must already exist — it is made in the admin UI — and a deploy to
+ * another name, one that does not exist included, is a 403.
  * @summary Replace the space's schema
  */
 export const deploySchema = async (space: string,
@@ -1394,7 +1398,8 @@ export const getUpdateAdminListContentUrl = (space: string,
 /**
  * `data` is merged onto the current draft (or, without one, the published
  * data): keys present replace, a `null` value removes the key, keys absent
- * stay. The result is validated whole. A new draft key is issued, so earlier
+ * stay. A key that is no field of the model is refused (`unknown_field`),
+ * `null` or not. The result is validated whole. A new draft key is issued, so earlier
  * preview links stop working. When the result is what the content holds
  * already, nothing is written -- no draft, no revision, no webhook -- and
  * the content comes back as it is; when it is the published data again,
