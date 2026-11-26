@@ -380,6 +380,13 @@ export interface Model {
      */
   label?: string;
   /**
+     * `true` keeps every write to the model's contents as a revision,
+     * for the admin UI's history. Absent or `false`, none is kept, and a
+     * GET leaves it out. Taking it away from a deployed model deletes
+     * its history and is destructive.
+     */
+  history?: boolean;
+  /**
      * The name this model had. A deploy renames it and moves its
      * contents instead of dropping them; the stored schema keeps the
      * new name alone, so a GET never returns it. See SCHEMA.md.
@@ -577,7 +584,7 @@ export interface MediaList {
 export type BadRequestResponse = ApiError;
 
 /**
- * `bad_query`: a malformed `filters`, an unknown field in `filters`/`orders`/`include`, an unknown operator, an operator or an order a custom field, a field inside one or a repeater does not take, a value that is not a number for a `number` field or not `true`/`false` for a `boolean` one, an `include` path with a segment that is not a reference (or, on the way to one, a custom field or a repeater), or a bad integer
+ * `bad_query`: a malformed `filters`, an unknown field in `filters`/`orders`/`include`, an unknown operator, an operator or an order a custom field, a field inside one or a repeater does not take, an order on a field that does not sort, a value that is not a number for a `number` field or not `true`/`false` for a `boolean` one, an `include` path with a segment that is not a reference (or, on the way to one, a custom field or a repeater), or a bad integer
  */
 export type BadQueryResponse = ApiError;
 
@@ -627,6 +634,8 @@ export type OffsetParameter = number;
  * e.g. `-publishedAt,title`. Default: newest published first. `id`
  * orders by the ids' text, not by when the contents were made;
  * `createdAt` by its value, which creating the content may have given.
+ * Only `text`, `slug`, `number`, `boolean`, `date` and `datetime` fields
+ * and the system fields sort; any other field is `bad_query`.
  */
 export type OrdersParameter = string;
 
@@ -703,6 +712,8 @@ offset?: OffsetParameter;
  * e.g. `-publishedAt,title`. Default: newest published first. `id`
  * orders by the ids' text, not by when the contents were made;
  * `createdAt` by its value, which creating the content may have given.
+ * Only `text`, `slug`, `number`, `boolean`, `date` and `datetime` fields
+ * and the system fields sort; any other field is `bad_query`.
  */
 orders?: OrdersParameter;
 /**
@@ -876,6 +887,8 @@ offset?: OffsetParameter;
  * e.g. `-publishedAt,title`. Default: newest published first. `id`
  * orders by the ids' text, not by when the contents were made;
  * `createdAt` by its value, which creating the content may have given.
+ * Only `text`, `slug`, `number`, `boolean`, `date` and `datetime` fields
+ * and the system fields sort; any other field is `bad_query`.
  */
 orders?: OrdersParameter;
 /**
@@ -1196,8 +1209,9 @@ export const getDeploySchemaUrl = (space: string,
  * through, a removed or retyped field's values are taken out of every
  * published object, draft and revision (inside a custom field or a
  * repeater's rows too), a custom field dropped from a repeater's
- * `customFields` takes its rows out of every revision, and a model removed,
- * or whose `kind` changes, loses its contents and their history. The
+ * `customFields` takes its rows out of every revision, a model removed,
+ * or whose `kind` changes, loses its contents and their history, and a
+ * model whose `history` is taken away loses its history. The
  * space must already exist — it is made in the admin UI — and a deploy to
  * another name, one that does not exist included, is a 403.
  * @summary Replace the space's schema

@@ -111,6 +111,7 @@ export default defineConfig({
         name: "blog",
         kind: "list",
         label: "title",
+        history: true,
         fields: [
           { name: "title", type: "text", required: true },
           { name: "slug", type: "slug", required: true },
