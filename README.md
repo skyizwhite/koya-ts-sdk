@@ -192,8 +192,8 @@ management key is only ever read from the environment.
 
 ## Developing
 
-Node comes from [devbox](https://www.jetify.com/devbox): `devbox shell`, or
-prefix commands with `devbox run --`.
+Node comes from [mise](https://mise.jdx.dev), as `mise.toml` pins it: `mise install`,
+then run commands where mise is activated, or prefix them with `mise exec --`.
 
 ```sh
 npm install
